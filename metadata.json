@@ -1,0 +1,5 @@
+{
+  "name": "La Tavernetta Reservations",
+  "description": "Modern reservation system for an Italian restaurant with Supabase and Stripe integration.",
+  "requestFramePermissions": []
+}

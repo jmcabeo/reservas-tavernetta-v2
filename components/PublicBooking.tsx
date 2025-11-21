@@ -139,13 +139,63 @@ const PublicBooking: React.FC<Props> = ({ lang }) => {
     setLoading(true);
     setError(null);
 
+    // 1️⃣ Crear la reserva en la base de datos
     const result = await createBooking(formData, isWaitlist);
 
-    setLoading(false);
+    // 2️⃣ Si la reserva se creó correctamente
     if (result.success) {
-      setSuccess(true);
+      // Si es una lista de espera, solo mostramos el mensaje de éxito
+      if (isWaitlist) {
+        setSuccess(true);
+        setLoading(false);
+        return;
+      }
+
+      // 3️⃣ Para reservas normales, llamamos al webhook de n8n que genera la sesión de Stripe
+      try {
+        const payload = {
+          bookingId: result.bookingId,
+          amount: formData.pax * DEPOSIT_PER_PAX, // importe de la fianza
+          name: formData.name,
+          email: formData.email,
+          phone: formData.phone,
+          date: formData.date,
+          time: formData.time,
+          pax: formData.pax,
+        };
+
+        const resp = await fetch('https://n8n.captialeads.com/webhook/crear-pago', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+
+        if (!resp.ok) {
+          throw new Error('Webhook responded with status ' + resp.status);
+        }
+
+        const data = await resp.json();
+        // n8n suele devolver la URL en la propiedad `url` (ajusta si tu flujo usa otro nombre)
+        const checkoutUrl = data.url || data.checkoutUrl || data.sessionUrl;
+        if (!checkoutUrl) {
+          throw new Error('No checkout URL returned from webhook');
+        }
+
+        // 4️⃣ Redirigir al cliente a Stripe Checkout
+        window.location.href = checkoutUrl;
+        // No marcamos success aquí porque la página cambiará
+        setLoading(false);
+        return;
+      } catch (err) {
+        console.error('Error creating Stripe session:', err);
+        setError('Error al iniciar el pago. Por favor, intente de nuevo.');
+        setLoading(false);
+        return;
+      }
     } else {
+      // 5️⃣ Si la reserva falló en la base de datos
       setError(result.error || 'Unknown error');
+      setLoading(false);
     }
   };
 

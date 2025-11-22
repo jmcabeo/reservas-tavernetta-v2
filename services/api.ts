@@ -261,7 +261,9 @@ export const updateBooking = async (bookingId: string, updates: Partial<BookingF
       customer_name: updates.name,
       customer_email: updates.email,
       customer_phone: updates.phone,
-      comments: updates.comments
+      comments: updates.comments,
+      deposit_amount: updates.deposit_amount,
+      status: updates.status
     })
     .eq('id', bookingId);
 
@@ -392,3 +394,37 @@ const mockStripeRefund = async (bookingId: string): Promise<{ success: boolean }
     }, 1000);
   });
 };
+
+/**
+ * Settings Management
+ */
+export const getSettings = async (): Promise<Record<string, any>> => {
+  const { data, error } = await supabase
+    .from('settings')
+    .select('*');
+
+  if (error) {
+    console.error('Error fetching settings:', error);
+    return {};
+  }
+
+  const settings: Record<string, any> = {};
+  data.forEach((row: any) => {
+    settings[row.key] = row.value;
+  });
+  return settings;
+};
+
+export const updateSetting = async (key: string, value: string): Promise<boolean> => {
+  // Upsert to handle both insert and update
+  const { error } = await supabase
+    .from('settings')
+    .upsert({ key, value });
+
+  if (error) {
+    console.error('Error updating setting:', error);
+    return false;
+  }
+  return true;
+};
+

@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { Users, Calendar, Clock, CheckCircle, AlertCircle, ChevronRight, CreditCard, ChevronDown, ChevronUp, Sun, Armchair, Utensils, Wine, Star } from 'lucide-react';
 import { BookingFormData, Turn, AvailabilityResponse } from '../types';
 import { TRANSLATIONS, DEPOSIT_PER_PAX, generateTimeSlots, LUNCH_START, LUNCH_END, DINNER_START, DINNER_END } from '../constants';
-import { checkAvailability, createBooking } from '../services/api';
+import { checkAvailability, createBooking, getSettings } from '../services/api';
 
 interface Props {
   lang: 'es' | 'en';
@@ -68,6 +68,13 @@ const PublicBooking: React.FC<Props> = ({ lang }) => {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<boolean>(false);
   const [isWaitlist, setIsWaitlist] = useState<boolean>(false);
+  const [depositEnabled, setDepositEnabled] = useState<boolean>(true);
+
+  React.useEffect(() => {
+    getSettings().then(settings => {
+      setDepositEnabled(settings['enable_deposit'] !== 'false');
+    });
+  }, []);
 
   // Form State
   const [formData, setFormData] = useState<BookingFormData>({
@@ -151,7 +158,14 @@ const PublicBooking: React.FC<Props> = ({ lang }) => {
         return;
       }
 
-      // 3️⃣ Para reservas normales, llamamos al webhook de n8n que genera la sesión de Stripe
+      // 3️⃣ Para reservas normales, verificamos si hay fianza
+      if (!depositEnabled) {
+        setSuccess(true);
+        setLoading(false);
+        return;
+      }
+
+      // 4️⃣ Si hay fianza, llamamos al webhook de n8n
       try {
         const payload = {
           bookingId: result.bookingId,
@@ -568,7 +582,7 @@ const PublicBooking: React.FC<Props> = ({ lang }) => {
                 </div>
               </div>
 
-              {!isWaitlist && (
+              {!isWaitlist && depositEnabled && (
                 <div className="bg-gray-50 p-6 border border-gray-200 mt-8">
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="text-tav-black font-serif font-bold text-lg flex items-center gap-2">
@@ -612,7 +626,7 @@ const PublicBooking: React.FC<Props> = ({ lang }) => {
                   ${isWaitlist ? 'bg-gray-800 hover:bg-black' : 'bg-tav-black hover:bg-gray-800'}
                 `}
               >
-                {isWaitlist ? t.joinWaitlist : t.book}
+                {isWaitlist ? t.joinWaitlist : (depositEnabled ? t.book : 'Confirmar Reserva')}
               </button>
             </form>
           </div>

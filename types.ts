@@ -6,6 +6,8 @@ export type Turn = 'lunch' | 'dinner';
 export interface Zone {
   id: number;
   name: string;
+  name_es?: string;
+  name_en?: string;
   description?: string;
   capacity?: number;
 }
@@ -65,6 +67,8 @@ export interface BookingFormData {
   email: string;
   phone: string;
   comments?: string;
+  deposit_amount?: number;
+  status?: BookingStatus;
 }
 
 export interface Translation {

@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { LogOut, Calendar as CalendarIcon, Users, CheckCircle, XCircle, Loader2, Utensils, Plus, Eye, Phone, Mail, DollarSign } from 'lucide-react';
 import { Booking, BookingStatus, Turn, Zone, Table, BookingFormData } from '../types';
-import { getBookingsByDate, checkInBooking, markNoShow, createBooking, updateBooking, blockDay, unblockDay, getBlockedDays, createBlockingBooking, deleteBooking } from '../services/api';
+import { getBookingsByDate, checkInBooking, markNoShow, createBooking, updateBooking, blockDay, unblockDay, getBlockedDays, createBlockingBooking, deleteBooking, getSettings, updateSetting } from '../services/api';
 import { supabase } from '../services/supabaseClient';
 import { generateTimeSlots, LUNCH_START, LUNCH_END, DINNER_START, DINNER_END } from '../constants';
 
@@ -33,7 +33,9 @@ const AdminDashboard: React.FC<Props> = ({ onLogout }) => {
     zone_id: 1,
     name: '',
     email: '',
-    phone: ''
+    phone: '',
+    deposit_amount: 0,
+    status: 'confirmed'
   });
 
   // Edit Booking State
@@ -46,6 +48,9 @@ const AdminDashboard: React.FC<Props> = ({ onLogout }) => {
   const [showBlockModal, setShowBlockModal] = useState(false);
   const [blockedDays, setBlockedDays] = useState<string[]>([]);
   const [newBlockDate, setNewBlockDate] = useState('');
+
+  // Settings State
+  const [depositEnabled, setDepositEnabled] = useState<boolean>(true);
 
   // Zone Blocking State
   const [zones, setZones] = useState<Zone[]>([]);
@@ -136,10 +141,17 @@ const AdminDashboard: React.FC<Props> = ({ onLogout }) => {
     if (data) setTables(data);
   };
 
+  const fetchSettings = async () => {
+    const settings = await getSettings();
+    // Default to true if not set
+    setDepositEnabled(settings['enable_deposit'] !== 'false');
+  };
+
   useEffect(() => {
     fetchBookings();
     fetchZones();
     fetchTables();
+    fetchSettings();
 
     // Subscribe to realtime changes
     const subscription = supabase
@@ -217,7 +229,9 @@ const AdminDashboard: React.FC<Props> = ({ onLogout }) => {
       name: booking.customer_name,
       email: booking.customer_email,
       phone: booking.customer_phone,
-      comments: booking.comments
+      comments: booking.comments,
+      deposit_amount: booking.deposit_amount,
+      status: booking.status
     });
     setSelectedBooking(booking);
     setIsEditing(true);
@@ -446,7 +460,26 @@ const AdminDashboard: React.FC<Props> = ({ onLogout }) => {
               </button>
             </div>
 
-            <div className="flex gap-2 ml-auto">
+
+
+            <div className="flex gap-2 ml-auto items-center">
+              <div className="flex items-center gap-2 mr-4 bg-gray-50 px-3 py-2 border border-gray-200 rounded-sm">
+                <span className="text-xs font-bold uppercase text-gray-500">Fianza</span>
+                <button
+                  onClick={async () => {
+                    const newValue = !depositEnabled;
+                    setDepositEnabled(newValue);
+                    await updateSetting('enable_deposit', String(newValue));
+                    showToast(`Fianza ${newValue ? 'activada' : 'desactivada'}`, 'success');
+                  }}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${depositEnabled ? 'bg-tav-gold' : 'bg-gray-300'}`}
+                >
+                  <span
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${depositEnabled ? 'translate-x-6' : 'translate-x-1'}`}
+                  />
+                </button>
+              </div>
+
               <button
                 type="button"
                 onClick={() => { fetchBlockedDays(); setShowBlockModal(true); }}
@@ -465,7 +498,9 @@ const AdminDashboard: React.FC<Props> = ({ onLogout }) => {
                     zone_id: 1,
                     name: '',
                     email: '',
-                    phone: ''
+                    phone: '',
+                    deposit_amount: 0,
+                    status: 'confirmed'
                   });
                   setShowManualModal(true);
                 }}
@@ -478,498 +513,549 @@ const AdminDashboard: React.FC<Props> = ({ onLogout }) => {
         </div>
 
         {/* Calendar View */}
-        {viewMode === 'calendar' && (
-          <div className="bg-white shadow-lg p-6 border-t border-gray-100">
-            {(() => {
-              const currentDate = new Date(date);
-              const year = currentDate.getFullYear();
-              const month = currentDate.getMonth();
-              const calendarDays = generateCalendarDays(year, month);
-              const monthName = new Date(year, month).toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
+        {
+          viewMode === 'calendar' && (
+            <div className="bg-white shadow-lg p-6 border-t border-gray-100">
+              {(() => {
+                const currentDate = new Date(date);
+                const year = currentDate.getFullYear();
+                const month = currentDate.getMonth();
+                const calendarDays = generateCalendarDays(year, month);
+                const monthName = new Date(year, month).toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
 
-              return (
-                <>
-                  <div className="flex justify-between items-center mb-6">
-                    <h3 className="text-2xl font-serif font-bold text-tav-black capitalize">{monthName}</h3>
-                    <div className="flex gap-2">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const prev = new Date(year, month - 1, 1);
-                          setDate(prev.toISOString().split('T')[0]);
-                        }}
-                        className="px-4 py-2 border border-gray-300 hover:bg-gray-50 text-gray-600 font-bold text-xs uppercase"
-                      >
-                        ← Anterior
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setDate(new Date().toISOString().split('T')[0])}
-                        className="px-4 py-2 border border-tav-gold bg-tav-gold text-tav-black font-bold text-xs uppercase hover:bg-amber-600"
-                      >
-                        Hoy
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const next = new Date(year, month + 1, 1);
-                          setDate(next.toISOString().split('T')[0]);
-                        }}
-                        className="px-4 py-2 border border-gray-300 hover:bg-gray-50 text-gray-600 font-bold text-xs uppercase"
-                      >
-                        Siguiente →
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-7 gap-2">
-                    {['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'].map(day => (
-                      <div key={day} className="text-center font-bold text-xs uppercase text-gray-500 py-2">
-                        {day}
-                      </div>
-                    ))}
-
-                    {calendarDays.map((dayInfo, index) => {
-                      if (!dayInfo.isCurrentMonth) {
-                        return <div key={index} className="aspect-square" />;
-                      }
-
-                      const isToday = dayInfo.date === new Date().toISOString().split('T')[0];
-                      const isSelected = dayInfo.date === date;
-
-                      return (
+                return (
+                  <>
+                    <div className="flex justify-between items-center mb-6">
+                      <h3 className="text-2xl font-serif font-bold text-tav-black capitalize">{monthName}</h3>
+                      <div className="flex gap-2">
                         <button
-                          key={index}
                           type="button"
                           onClick={() => {
-                            setDate(dayInfo.date);
-                            setViewMode('table');
+                            const prev = new Date(year, month - 1, 1);
+                            setDate(prev.toISOString().split('T')[0]);
                           }}
-                          className={`aspect-square border rounded-sm p-2 flex flex-col items-center justify-center transition-all hover:shadow-md
+                          className="px-4 py-2 border border-gray-300 hover:bg-gray-50 text-gray-600 font-bold text-xs uppercase"
+                        >
+                          ← Anterior
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setDate(new Date().toISOString().split('T')[0])}
+                          className="px-4 py-2 border border-tav-gold bg-tav-gold text-tav-black font-bold text-xs uppercase hover:bg-amber-600"
+                        >
+                          Hoy
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const next = new Date(year, month + 1, 1);
+                            setDate(next.toISOString().split('T')[0]);
+                          }}
+                          className="px-4 py-2 border border-gray-300 hover:bg-gray-50 text-gray-600 font-bold text-xs uppercase"
+                        >
+                          Siguiente →
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-7 gap-2">
+                      {['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'].map(day => (
+                        <div key={day} className="text-center font-bold text-xs uppercase text-gray-500 py-2">
+                          {day}
+                        </div>
+                      ))}
+
+                      {calendarDays.map((dayInfo, index) => {
+                        if (!dayInfo.isCurrentMonth) {
+                          return <div key={index} className="aspect-square" />;
+                        }
+
+                        const isToday = dayInfo.date === new Date().toISOString().split('T')[0];
+                        const isSelected = dayInfo.date === date;
+
+                        return (
+                          <button
+                            key={index}
+                            type="button"
+                            onClick={() => {
+                              setDate(dayInfo.date);
+                              setViewMode('table');
+                            }}
+                            className={`aspect-square border rounded-sm p-2 flex flex-col items-center justify-center transition-all hover:shadow-md
                             ${isSelected ? 'border-tav-gold bg-tav-gold text-tav-black ring-2 ring-tav-gold' : 'border-gray-200 hover:border-tav-gold'}
                             ${isToday && !isSelected ? 'bg-blue-50 border-blue-300' : ''}
                           `}
-                        >
-                          <span className={`text-lg font-bold ${isSelected ? 'text-tav-black' : 'text-gray-700'}`}>
-                            {dayInfo.day}
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </>
-              );
-            })()}
-          </div>
-        )}
+                          >
+                            <span className={`text-lg font-bold ${isSelected ? 'text-tav-black' : 'text-gray-700'}`}>
+                              {dayInfo.day}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </>
+                );
+              })()}
+            </div>
+          )
+        }
 
         {/* Table */}
-        {viewMode === 'table' && (
-          <div className="bg-white shadow-lg overflow-hidden border-t border-gray-100">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
-                <thead className="bg-gray-50 text-gray-500 text-xs uppercase font-bold tracking-wider">
-                  <tr>
-                    {statusFilter === 'waitlist' && <th className="p-4 font-medium">#</th>}
-                    <th className="p-4 font-medium">Hora</th>
-                    <th className="p-4 font-medium">Cliente</th>
-                    <th className="p-4 font-medium">Pax</th>
-                    <th className="p-4 font-medium">Zona</th>
-                    <th className="p-4 font-medium">Estado</th>
-                    <th className="p-4 font-medium text-right">Acciones</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100 text-sm">
-                  {loading ? (
-                    <tr><td colSpan={statusFilter === 'waitlist' ? 7 : 6} className="p-8 text-center"><Loader2 className="animate-spin mx-auto text-tav-gold" /></td></tr>
-                  ) : filteredBookings.length === 0 ? (
-                    <tr><td colSpan={statusFilter === 'waitlist' ? 7 : 6} className="p-8 text-center text-gray-500 italic">No hay reservas para este día/turno.</td></tr>
-                  ) : (
-                    filteredBookings.map((b, index) => {
-                      // Safely handle ID as string
-                      const bookingId = String(b.id);
-                      // Safely handle Zone Name
-                      const zoneName = b.zones?.name_es || `Zona ${b.zone_id}`;
+        {
+          viewMode === 'table' && (
+            <div className="bg-white shadow-lg overflow-hidden border-t border-gray-100">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead className="bg-gray-50 text-gray-500 text-xs uppercase font-bold tracking-wider">
+                    <tr>
+                      {statusFilter === 'waitlist' && <th className="p-4 font-medium">#</th>}
+                      <th className="p-4 font-medium">Hora</th>
+                      <th className="p-4 font-medium">Cliente</th>
+                      <th className="p-4 font-medium">Pax</th>
+                      <th className="p-4 font-medium">Zona</th>
+                      <th className="p-4 font-medium">Estado</th>
+                      <th className="p-4 font-medium text-right">Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100 text-sm">
+                    {loading ? (
+                      <tr><td colSpan={statusFilter === 'waitlist' ? 7 : 6} className="p-8 text-center"><Loader2 className="animate-spin mx-auto text-tav-gold" /></td></tr>
+                    ) : filteredBookings.length === 0 ? (
+                      <tr><td colSpan={statusFilter === 'waitlist' ? 7 : 6} className="p-8 text-center text-gray-500 italic">No hay reservas para este día/turno.</td></tr>
+                    ) : (
+                      filteredBookings.map((b, index) => {
+                        // Safely handle ID as string
+                        const bookingId = String(b.id);
+                        // Safely handle Zone Name
+                        const zoneName = b.zones?.name_es || `Zona ${b.zone_id}`;
 
-                      return (
-                        <tr key={bookingId} className="hover:bg-gray-50 transition-colors">
-                          {statusFilter === 'waitlist' && (
+                        return (
+                          <tr key={bookingId} className="hover:bg-gray-50 transition-colors">
+                            {statusFilter === 'waitlist' && (
+                              <td className="p-4">
+                                <div className="w-8 h-8 bg-amber-500 text-white font-bold rounded-full flex items-center justify-center">
+                                  {index + 1}
+                                </div>
+                              </td>
+                            )}
                             <td className="p-4">
-                              <div className="w-8 h-8 bg-amber-500 text-white font-bold rounded-full flex items-center justify-center">
-                                {index + 1}
+                              <div className="flex items-center gap-2">
+                                {b.turn === 'lunch' ? <span className="w-2 h-2 rounded-full bg-tav-gold" title="Comida"></span> : <span className="w-2 h-2 rounded-full bg-tav-black" title="Cena"></span>}
+                                <span className="font-serif font-bold text-tav-black text-lg">{b.time}</span>
                               </div>
                             </td>
-                          )}
-                          <td className="p-4">
-                            <div className="flex items-center gap-2">
-                              {b.turn === 'lunch' ? <span className="w-2 h-2 rounded-full bg-tav-gold" title="Comida"></span> : <span className="w-2 h-2 rounded-full bg-tav-black" title="Cena"></span>}
-                              <span className="font-serif font-bold text-tav-black text-lg">{b.time}</span>
-                            </div>
-                          </td>
-                          <td className="p-4">
-                            <div className="font-bold text-tav-black">{b.customer_name}</div>
-                            <div className="text-xs text-gray-400 tracking-wide hidden sm:block">#{bookingId.slice(0, 8)}</div>
-                          </td>
-                          <td className="p-4">
-                            <div className="flex items-center gap-1 text-gray-600">
-                              <Users className="w-4 h-4 text-tav-gold" /> {b.pax}
-                            </div>
-                          </td>
-                          <td className="p-4 text-gray-600 font-serif italic">
-                            {zoneName}
-                          </td>
-                          <td className="p-4">
-                            <span className={`px - 2 py - 1 text - [10px] font - bold uppercase tracking - widest border
+                            <td className="p-4">
+                              <div className="font-bold text-tav-black">{b.customer_name}</div>
+                              <div className="text-xs text-gray-400 tracking-wide hidden sm:block">#{bookingId.slice(0, 8)}</div>
+                            </td>
+                            <td className="p-4">
+                              <div className="flex items-center gap-1 text-gray-600">
+                                <Users className="w-4 h-4 text-tav-gold" /> {b.pax}
+                              </div>
+                            </td>
+                            <td className="p-4 text-gray-600 font-serif italic">
+                              {zoneName}
+                            </td>
+                            <td className="p-4">
+                              <span className={`px - 2 py - 1 text - [10px] font - bold uppercase tracking - widest border
                            ${b.status === 'confirmed' ? 'bg-green-50 text-green-700 border-green-200' : ''}
                            ${b.status === 'completed' ? 'bg-gray-100 text-gray-500 border-gray-200' : ''}
                            ${b.status === 'cancelled' ? 'bg-red-50 text-red-700 border-red-100' : ''}
                            ${b.status === 'waiting_list' ? 'bg-yellow-50 text-yellow-700 border-yellow-100' : ''}
                            ${b.status === 'blocked' ? 'bg-gray-800 text-white border-gray-800' : ''}
 `}>
-                              {b.status === 'waiting_list' ? 'LISTA ESPERA' : b.status.toUpperCase()}
-                            </span>
-                          </td>
-                          <td className="p-4 text-right">
-                            <div className="flex justify-end gap-2">
-                              <button
-                                onClick={() => setSelectedBooking(b)}
-                                title="Ver Detalles"
-                                className="p-2 bg-white border border-gray-200 text-gray-600 hover:bg-gray-100 transition-colors rounded-sm"
-                              >
-                                <Eye className="w-4 h-4" />
-                              </button>
+                                {b.status === 'waiting_list' ? 'LISTA ESPERA' : b.status.toUpperCase()}
+                              </span>
+                            </td>
+                            <td className="p-4 text-right">
+                              <div className="flex justify-end gap-2">
+                                <button
+                                  onClick={() => setSelectedBooking(b)}
+                                  title="Ver Detalles"
+                                  className="p-2 bg-white border border-gray-200 text-gray-600 hover:bg-gray-100 transition-colors rounded-sm"
+                                >
+                                  <Eye className="w-4 h-4" />
+                                </button>
 
-                              {b.status === 'confirmed' && (
-                                <>
-                                  <button
-                                    onClick={() => handleCheckIn(bookingId)}
-                                    title="Check In"
-                                    className="p-2 bg-white border border-green-200 text-green-600 hover:bg-green-50 transition-colors rounded-sm"
-                                  >
-                                    <CheckCircle className="w-4 h-4" />
-                                  </button>
-                                  <button
-                                    onClick={() => handleNoShow(bookingId)}
-                                    title="No Show"
-                                    className="p-2 bg-white border border-red-200 text-red-600 hover:bg-red-50 transition-colors rounded-sm"
-                                  >
-                                    <XCircle className="w-4 h-4" />
-                                  </button>
-                                </>
-                              )}
-                            </div>
-                          </td>
-                        </tr>
-                      )
-                    })
-                  )}
-                </tbody>
-              </table>
+                                {b.status === 'confirmed' && (
+                                  <>
+                                    <button
+                                      onClick={() => handleCheckIn(bookingId)}
+                                      title="Check In"
+                                      className="p-2 bg-white border border-green-200 text-green-600 hover:bg-green-50 transition-colors rounded-sm"
+                                    >
+                                      <CheckCircle className="w-4 h-4" />
+                                    </button>
+                                    <button
+                                      onClick={() => handleNoShow(bookingId)}
+                                      title="No Show"
+                                      className="p-2 bg-white border border-red-200 text-red-600 hover:bg-red-50 transition-colors rounded-sm"
+                                    >
+                                      <XCircle className="w-4 h-4" />
+                                    </button>
+                                  </>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        )
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
-          </div>
-        )}
-      </main>
+          )
+        }
+      </main >
 
       {/* DETAILS MODAL */}
-      {selectedBooking && !isEditing && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 backdrop-blur-sm" onClick={() => setSelectedBooking(null)}>
-          <div className="bg-white p-8 max-w-md w-full border-t-4 border-tav-gold shadow-2xl" onClick={e => e.stopPropagation()}>
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="text-2xl font-serif font-bold text-tav-black">Detalle Reserva</h3>
-              <button onClick={() => setSelectedBooking(null)} className="text-gray-400 hover:text-tav-black"><XCircle /></button>
-            </div>
-
-            <div className="space-y-6">
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center text-tav-gold font-bold text-xl">
-                  {selectedBooking.customer_name.charAt(0)}
-                </div>
-                <div>
-                  <p className="font-bold text-lg">{selectedBooking.customer_name}</p>
-                  <p className="text-sm text-gray-500">ID: #{String(selectedBooking.id)}</p>
-                </div>
+      {
+        selectedBooking && !isEditing && (
+          <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 backdrop-blur-sm" onClick={() => setSelectedBooking(null)}>
+            <div className="bg-white p-8 max-w-md w-full border-t-4 border-tav-gold shadow-2xl" onClick={e => e.stopPropagation()}>
+              <div className="flex justify-between items-center mb-6">
+                <h3 className="text-2xl font-serif font-bold text-tav-black">Detalle Reserva</h3>
+                <button onClick={() => setSelectedBooking(null)} className="text-gray-400 hover:text-tav-black"><XCircle /></button>
               </div>
 
-              <div className="grid grid-cols-2 gap-4 py-4 border-t border-b border-gray-100">
-                <div className="flex items-center gap-3 text-sm">
-                  <Phone className="w-4 h-4 text-tav-gold" />
-                  <a href={`tel:${selectedBooking.customer_phone} `} className="hover:underline">{selectedBooking.customer_phone}</a>
+              <div className="space-y-6">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center text-tav-gold font-bold text-xl">
+                    {selectedBooking.customer_name.charAt(0)}
+                  </div>
+                  <div>
+                    <p className="font-bold text-lg">{selectedBooking.customer_name}</p>
+                    <p className="text-sm text-gray-500">ID: #{String(selectedBooking.id)}</p>
+                  </div>
                 </div>
-                <div className="flex items-center gap-3 text-sm">
-                  <Mail className="w-4 h-4 text-tav-gold" />
-                  <a href={`mailto:${selectedBooking.customer_email} `} className="hover:underline truncate">{selectedBooking.customer_email}</a>
-                </div>
-                <div className="flex items-center gap-3 text-sm">
-                  <Users className="w-4 h-4 text-tav-gold" />
-                  <span>{selectedBooking.pax} Personas</span>
-                </div>
-                <div className="flex items-center gap-3 text-sm">
-                  <DollarSign className="w-4 h-4 text-tav-gold" />
-                  <span>Fianza: €{selectedBooking.deposit_amount}</span>
-                </div>
-              </div>
 
-              <div className="bg-gray-50 p-4 text-sm text-gray-600 space-y-1">
-                <p><strong>Zona:</strong> {selectedBooking.zones?.name_es || ('Zona ' + selectedBooking.zone_id)}</p>
-                <p><strong>Fecha:</strong> {selectedBooking.date}</p>
-                <p><strong>Hora:</strong> {selectedBooking.time}</p>
-                <p><strong>Estado:</strong> <span className="uppercase font-bold">{selectedBooking.status}</span></p>
-              </div>
-
-              <div className="flex flex-col gap-2">
-                <div className="flex gap-2">
-                  {selectedBooking.status === 'confirmed' && (
-                    <>
-                      <button onClick={() => { handleCheckIn(String(selectedBooking.id)); setSelectedBooking(null); }} className="flex-1 py-3 bg-green-600 text-white text-xs font-bold uppercase tracking-widest hover:bg-green-700">Check-in</button>
-                      <button onClick={() => { handleNoShow(String(selectedBooking.id)); setSelectedBooking(null); }} className="flex-1 py-3 bg-red-600 text-white text-xs font-bold uppercase tracking-widest hover:bg-red-700">No-Show</button>
-                    </>
-                  )}
+                <div className="grid grid-cols-2 gap-4 py-4 border-t border-b border-gray-100">
+                  <div className="flex items-center gap-3 text-sm">
+                    <Phone className="w-4 h-4 text-tav-gold" />
+                    <a href={`tel:${selectedBooking.customer_phone} `} className="hover:underline">{selectedBooking.customer_phone}</a>
+                  </div>
+                  <div className="flex items-center gap-3 text-sm">
+                    <Mail className="w-4 h-4 text-tav-gold" />
+                    <a href={`mailto:${selectedBooking.customer_email} `} className="hover:underline truncate">{selectedBooking.customer_email}</a>
+                  </div>
+                  <div className="flex items-center gap-3 text-sm">
+                    <Users className="w-4 h-4 text-tav-gold" />
+                    <span>{selectedBooking.pax} Personas</span>
+                  </div>
+                  <div className="flex items-center gap-3 text-sm">
+                    <DollarSign className="w-4 h-4 text-tav-gold" />
+                    <span>Fianza: €{selectedBooking.deposit_amount}</span>
+                  </div>
                 </div>
-                <button onClick={() => openEditModal(selectedBooking)} className="w-full py-3 bg-tav-black text-tav-gold text-xs font-bold uppercase tracking-widest hover:bg-gray-900">Editar Reserva</button>
-                <button onClick={() => setSelectedBooking(null)} className="w-full py-3 border border-gray-300 text-gray-500 text-xs font-bold uppercase tracking-widest hover:bg-gray-100">Cerrar</button>
+
+                <div className="bg-gray-50 p-4 text-sm text-gray-600 space-y-1">
+                  <p><strong>Zona:</strong> {selectedBooking.zones?.name_es || ('Zona ' + selectedBooking.zone_id)}</p>
+                  <p><strong>Fecha:</strong> {selectedBooking.date}</p>
+                  <p><strong>Hora:</strong> {selectedBooking.time}</p>
+                  <p><strong>Estado:</strong> <span className="uppercase font-bold">{selectedBooking.status}</span></p>
+                </div>
+
+                <div className="flex flex-col gap-2">
+                  <div className="flex gap-2">
+                    {selectedBooking.status === 'confirmed' && (
+                      <>
+                        <button onClick={() => { handleCheckIn(String(selectedBooking.id)); setSelectedBooking(null); }} className="flex-1 py-3 bg-green-600 text-white text-xs font-bold uppercase tracking-widest hover:bg-green-700">Check-in</button>
+                        <button onClick={() => { handleNoShow(String(selectedBooking.id)); setSelectedBooking(null); }} className="flex-1 py-3 bg-red-600 text-white text-xs font-bold uppercase tracking-widest hover:bg-red-700">No-Show</button>
+                      </>
+                    )}
+                  </div>
+                  <button onClick={() => openEditModal(selectedBooking)} className="w-full py-3 bg-tav-black text-tav-gold text-xs font-bold uppercase tracking-widest hover:bg-gray-900">Editar Reserva</button>
+                  <button onClick={() => setSelectedBooking(null)} className="w-full py-3 border border-gray-300 text-gray-500 text-xs font-bold uppercase tracking-widest hover:bg-gray-100">Cerrar</button>
+                </div>
               </div>
             </div>
           </div>
-        </div>
-      )}
+        )
+      }
 
       {/* EDIT / MANUAL BOOKING MODAL */}
-      {(showManualModal || isEditing) && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
-          <div className="bg-white p-8 max-w-md w-full border-t-4 border-tav-gold shadow-2xl">
-            <h3 className="text-xl font-serif font-bold mb-6 text-tav-black">{isEditing ? 'Editar Reserva' : 'Nueva Reserva Manual'}</h3>
-            <form onSubmit={isEditing ? handleEditSubmit : handleManualSubmit} className="space-y-4">
-              <input
-                type="text" placeholder="Nombre Cliente" required
-                className="w-full border-b p-2 focus:border-tav-gold outline-none"
-                value={manualForm.name} onChange={e => setManualForm({ ...manualForm, name: e.target.value })}
-              />
-              <div className="grid grid-cols-2 gap-4">
+      {
+        (showManualModal || isEditing) && (
+          <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
+            <div className="bg-white p-8 max-w-md w-full border-t-4 border-tav-gold shadow-2xl">
+              <h3 className="text-xl font-serif font-bold mb-6 text-tav-black">{isEditing ? 'Editar Reserva' : 'Nueva Reserva Manual'}</h3>
+              <form onSubmit={isEditing ? handleEditSubmit : handleManualSubmit} className="space-y-4">
                 <input
-                  type="tel" placeholder="Teléfono" required
+                  type="text" placeholder="Nombre Cliente" required
                   className="w-full border-b p-2 focus:border-tav-gold outline-none"
-                  value={manualForm.phone} onChange={e => setManualForm({ ...manualForm, phone: e.target.value })}
+                  value={manualForm.name} onChange={e => setManualForm({ ...manualForm, name: e.target.value })}
                 />
-                <input
-                  type="number" placeholder="Pax" required min="1"
-                  className="w-full border-b p-2 focus:border-tav-gold outline-none"
-                  value={manualForm.pax} onChange={e => setManualForm({ ...manualForm, pax: parseInt(e.target.value) })}
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <select className="border-b p-2 focus:border-tav-gold outline-none bg-white" value={manualForm.turn!} onChange={e => setManualForm({ ...manualForm, turn: e.target.value as Turn, time: e.target.value === 'lunch' ? LUNCH_START : DINNER_START })}>
-                  <option value="lunch">Comida</option>
-                  <option value="dinner">Cena</option>
-                </select>
-                <select className="border-b p-2 focus:border-tav-gold outline-none bg-white" value={manualForm.time!} onChange={e => setManualForm({ ...manualForm, time: e.target.value })}>
-                  {manualTimeSlots.map(t => (
-                    <option key={t} value={t}>{t}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="grid grid-cols-1">
-                <input type="date" className="border-b p-2 focus:border-tav-gold outline-none" value={manualForm.date} onChange={e => setManualForm({ ...manualForm, date: e.target.value })} />
-              </div>
-              <div className="grid grid-cols-1">
-                <textarea
-                  placeholder="Comentarios / Notas"
-                  className="w-full border p-2 focus:border-tav-gold outline-none h-20 resize-none bg-gray-50"
-                  value={manualForm.comments || ''}
-                  onChange={e => setManualForm({ ...manualForm, comments: e.target.value })}
-                />
-              </div>
-              <div className="flex justify-between items-center mt-8">
-                <button
-                  type="button"
-                  onClick={handleDeleteBooking}
-                  className="px-4 py-2 bg-red-500 text-white text-sm uppercase font-bold tracking-wider hover:bg-red-600"
-                >
-                  Eliminar
-                </button>
-                <div className="flex gap-4">
-                  <button type="button" onClick={() => { setShowManualModal(false); setIsEditing(false); setSelectedBooking(null); }} className="px-4 py-2 text-gray-400 hover:text-gray-600 text-sm uppercase font-bold tracking-wider">Cancelar</button>
-                  <button type="submit" className="px-6 py-2 bg-tav-black text-tav-gold text-sm uppercase font-bold tracking-widest hover:bg-gray-900">{isEditing ? 'Guardar Cambios' : 'Crear'}</button>
+                <div className="grid grid-cols-2 gap-4">
+                  <input
+                    type="tel" placeholder="Teléfono" required
+                    className="w-full border-b p-2 focus:border-tav-gold outline-none"
+                    value={manualForm.phone} onChange={e => setManualForm({ ...manualForm, phone: e.target.value })}
+                  />
+                  <input
+                    type="number" placeholder="Pax" required min="1"
+                    className="w-full border-b p-2 focus:border-tav-gold outline-none"
+                    value={manualForm.pax} onChange={e => setManualForm({ ...manualForm, pax: parseInt(e.target.value) })}
+                  />
                 </div>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* BLOCKING MODAL */}
-      {showBlockModal && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
-          <div className="bg-white p-8 max-w-lg w-full border-t-4 border-red-500 shadow-2xl">
-            <h3 className="text-xl font-serif font-bold mb-6 text-tav-black flex items-center gap-2">
-              <XCircle className="text-red-500" /> Gestión de Bloqueos
-            </h3>
-
-            <div className="space-y-6">
-              {/* Block Day */}
-              <div className="bg-gray-50 p-4 border border-gray-200">
-                <h4 className="text-sm font-bold uppercase mb-2 text-gray-600">Bloquear Día Completo</h4>
-                <div className="flex gap-2 mb-4">
-                  <input
-                    type="date"
-                    className="flex-1 p-2 border border-gray-300"
-                    value={newBlockDate}
-                    onChange={e => setNewBlockDate(e.target.value)}
-                  />
-                  <button type="button" onClick={handleBlockDay} className="bg-red-500 text-white px-4 py-2 text-xs font-bold uppercase hover:bg-red-600">Bloquear</button>
-                </div>
-
-                <div className="space-y-2">
-                  <p className="text-xs text-gray-400 uppercase font-bold">Días Bloqueados (Futuros)</p>
-                  {blockedDays.length === 0 ? (
-                    <p className="text-sm italic text-gray-400">No hay días bloqueados.</p>
-                  ) : (
-                    <div className="flex flex-wrap gap-2">
-                      {blockedDays.map(d => (
-                        <span key={d} className="px-2 py-1 bg-red-100 text-red-700 text-xs font-bold rounded flex items-center gap-2">
-                          {d} <button type="button" onClick={() => handleUnblockDay(d)} className="hover:text-red-900"><XCircle className="w-3 h-3" /></button>
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-
-            </div>
-
-            {/* Block Zone / Table */}
-            <div className="bg-gray-50 p-4 border border-gray-200">
-              <h4 className="text-sm font-bold uppercase mb-2 text-gray-600">Bloquear Sala o Mesa</h4>
-
-              <div className="flex gap-4 mb-4">
-                <label className="flex items-center gap-2 text-sm font-bold cursor-pointer">
-                  <input
-                    type="radio"
-                    name="blockType"
-                    checked={!blockZoneForm.tableId}
-                    onChange={() => setBlockZoneForm({ ...blockZoneForm, tableId: undefined })}
-                  />
-                  Bloquear Zona Completa
-                </label>
-                <label className="flex items-center gap-2 text-sm font-bold cursor-pointer">
-                  <input
-                    type="radio"
-                    name="blockType"
-                    checked={blockZoneForm.tableId !== undefined}
-                    onChange={() => setBlockZoneForm({ ...blockZoneForm, tableId: tables.filter(t => t.zone_id === blockZoneForm.zoneId)[0]?.id || 0 })}
-                  />
-                  Bloquear Mesa Específica
-                </label>
-              </div>
-
-              <div className="space-y-3">
-                <div className="grid grid-cols-2 gap-2">
-                  <input
-                    type="date"
-                    className="p-2 border border-gray-300 w-full"
-                    value={blockZoneForm.date}
-                    onChange={e => setBlockZoneForm({ ...blockZoneForm, date: e.target.value })}
-                  />
-                  <select
-                    className="p-2 border border-gray-300 w-full"
-                    value={blockZoneForm.turn}
-                    onChange={e => setBlockZoneForm({ ...blockZoneForm, turn: e.target.value as Turn })}
-                  >
+                <div className="grid grid-cols-2 gap-4">
+                  <select className="border-b p-2 focus:border-tav-gold outline-none bg-white" value={manualForm.turn!} onChange={e => setManualForm({ ...manualForm, turn: e.target.value as Turn, time: e.target.value === 'lunch' ? LUNCH_START : DINNER_START })}>
                     <option value="lunch">Comida</option>
                     <option value="dinner">Cena</option>
                   </select>
+                  <select className="border-b p-2 focus:border-tav-gold outline-none bg-white" value={manualForm.time!} onChange={e => setManualForm({ ...manualForm, time: e.target.value })}>
+                    {manualTimeSlots.map(t => (
+                      <option key={t} value={t}>{t}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="grid grid-cols-1">
+                  <input type="date" className="border-b p-2 focus:border-tav-gold outline-none" value={manualForm.date} onChange={e => setManualForm({ ...manualForm, date: e.target.value })} />
                 </div>
 
-                <div className="grid grid-cols-1 gap-2">
-                  <label className="text-xs font-bold text-gray-500">Zona</label>
+                <div className="grid grid-cols-1">
+                  <label className="text-xs text-gray-400 uppercase font-bold">Zona</label>
                   <select
-                    className="p-2 border border-gray-300 w-full"
-                    value={blockZoneForm.zoneId}
-                    onChange={e => {
-                      const newZoneId = parseInt(e.target.value);
-                      setBlockZoneForm({
-                        ...blockZoneForm,
-                        zoneId: newZoneId,
-                        tableId: blockZoneForm.tableId ? (tables.filter(t => t.zone_id === newZoneId)[0]?.id || 0) : undefined
-                      });
-                    }}
+                    className="w-full border-b p-2 focus:border-tav-gold outline-none bg-white"
+                    value={manualForm.zone_id || ''}
+                    onChange={e => setManualForm({ ...manualForm, zone_id: parseInt(e.target.value) })}
                   >
                     {zones.map(z => (
-                      <option key={z.id} value={z.id}>{(z as any).name || (z as any).name_es || (z as any).zone_name || 'Zona ' + z.id}</option>
+                      <option key={z.id} value={z.id}>{z.name_es || z.name || ('Zona ' + z.id)}</option>
                     ))}
                   </select>
                 </div>
 
-                {blockZoneForm.tableId !== undefined && (
-                  <div className="grid grid-cols-1 gap-2">
-                    <label className="text-xs font-bold text-gray-500">Mesa (Capacidad)</label>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-xs text-gray-400 uppercase font-bold">Estado</label>
                     <select
-                      className="p-2 border border-gray-300 w-full"
-                      value={blockZoneForm.tableId}
-                      onChange={e => setBlockZoneForm({ ...blockZoneForm, tableId: parseInt(e.target.value) })}
+                      className="w-full border-b p-2 focus:border-tav-gold outline-none bg-white uppercase font-bold text-xs"
+                      value={manualForm.status || 'confirmed'}
+                      onChange={e => setManualForm({ ...manualForm, status: e.target.value as BookingStatus })}
                     >
-                      {tables
-                        .filter(t => t.zone_id === blockZoneForm.zoneId)
-                        .map(t => (
-                          <option key={t.id} value={t.id}>Mesa {(t as any).table_number || t.id} ({t.min_pax}-{t.max_pax} pax)</option>
-                        ))
-                      }
+                      <option value="confirmed">CONFIRMADA</option>
+                      <option value="waiting_list">LISTA DE ESPERA</option>
+                      <option value="cancelled">CANCELADA</option>
+                      <option value="completed">COMPLETADA</option>
                     </select>
                   </div>
-                )}
+                  <div>
+                    <label className="text-xs text-gray-400 uppercase font-bold">Fianza (€)</label>
+                    <input
+                      type="number"
+                      placeholder="Fianza"
+                      className="w-full border-b p-2 focus:border-tav-gold outline-none"
+                      value={manualForm.deposit_amount || 0}
+                      onChange={e => setManualForm({ ...manualForm, deposit_amount: parseFloat(e.target.value) || 0 })}
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-1">
+                  <textarea
+                    placeholder="Comentarios / Notas"
+                    className="w-full border p-2 focus:border-tav-gold outline-none h-20 resize-none bg-gray-50"
+                    value={manualForm.comments || ''}
+                    onChange={e => setManualForm({ ...manualForm, comments: e.target.value })}
+                  />
+                </div>
+                <div className="flex justify-between items-center mt-8">
+                  <button
+                    type="button"
+                    onClick={handleDeleteBooking}
+                    className="px-4 py-2 bg-red-500 text-white text-sm uppercase font-bold tracking-wider hover:bg-red-600"
+                  >
+                    Eliminar
+                  </button>
+                  <div className="flex gap-4">
+                    <button type="button" onClick={() => { setShowManualModal(false); setIsEditing(false); setSelectedBooking(null); }} className="px-4 py-2 text-gray-400 hover:text-gray-600 text-sm uppercase font-bold tracking-wider">Cancelar</button>
+                    <button type="submit" className="px-6 py-2 bg-tav-black text-tav-gold text-sm uppercase font-bold tracking-widest hover:bg-gray-900">{isEditing ? 'Guardar Cambios' : 'Crear'}</button>
+                  </div>
+                </div>
+              </form>
+            </div>
+          </div>
+        )
+      }
 
-                <input
-                  type="text"
-                  placeholder="Razón (ej: Mantenimiento, Reservado VIP)"
-                  className="p-2 border border-gray-300 w-full"
-                  value={blockZoneForm.reason}
-                  onChange={e => setBlockZoneForm({ ...blockZoneForm, reason: e.target.value })}
-                />
+      {/* BLOCKING MODAL */}
+      {
+        showBlockModal && (
+          <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
+            <div className="bg-white p-8 max-w-lg w-full border-t-4 border-red-500 shadow-2xl">
+              <h3 className="text-xl font-serif font-bold mb-6 text-tav-black flex items-center gap-2">
+                <XCircle className="text-red-500" /> Gestión de Bloqueos
+              </h3>
 
-                <button type="button" onClick={handleBlockZone} className="w-full bg-gray-800 text-white px-4 py-2 text-xs font-bold uppercase hover:bg-black">
-                  {blockZoneForm.tableId ? 'Bloquear Mesa' : 'Bloquear Zona'}
+              <div className="space-y-6">
+                {/* Block Day */}
+                <div className="bg-gray-50 p-4 border border-gray-200">
+                  <h4 className="text-sm font-bold uppercase mb-2 text-gray-600">Bloquear Día Completo</h4>
+                  <div className="flex gap-2 mb-4">
+                    <input
+                      type="date"
+                      className="flex-1 p-2 border border-gray-300"
+                      value={newBlockDate}
+                      onChange={e => setNewBlockDate(e.target.value)}
+                    />
+                    <button type="button" onClick={handleBlockDay} className="bg-red-500 text-white px-4 py-2 text-xs font-bold uppercase hover:bg-red-600">Bloquear</button>
+                  </div>
+
+                  <div className="space-y-2">
+                    <p className="text-xs text-gray-400 uppercase font-bold">Días Bloqueados (Futuros)</p>
+                    {blockedDays.length === 0 ? (
+                      <p className="text-sm italic text-gray-400">No hay días bloqueados.</p>
+                    ) : (
+                      <div className="flex flex-wrap gap-2">
+                        {blockedDays.map(d => (
+                          <span key={d} className="px-2 py-1 bg-red-100 text-red-700 text-xs font-bold rounded flex items-center gap-2">
+                            {d} <button type="button" onClick={() => handleUnblockDay(d)} className="hover:text-red-900"><XCircle className="w-3 h-3" /></button>
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+              </div>
+
+              {/* Block Zone / Table */}
+              <div className="bg-gray-50 p-4 border border-gray-200">
+                <h4 className="text-sm font-bold uppercase mb-2 text-gray-600">Bloquear Sala o Mesa</h4>
+
+                <div className="flex gap-4 mb-4">
+                  <label className="flex items-center gap-2 text-sm font-bold cursor-pointer">
+                    <input
+                      type="radio"
+                      name="blockType"
+                      checked={!blockZoneForm.tableId}
+                      onChange={() => setBlockZoneForm({ ...blockZoneForm, tableId: undefined })}
+                    />
+                    Bloquear Zona Completa
+                  </label>
+                  <label className="flex items-center gap-2 text-sm font-bold cursor-pointer">
+                    <input
+                      type="radio"
+                      name="blockType"
+                      checked={blockZoneForm.tableId !== undefined}
+                      onChange={() => setBlockZoneForm({ ...blockZoneForm, tableId: tables.filter(t => t.zone_id === blockZoneForm.zoneId)[0]?.id || 0 })}
+                    />
+                    Bloquear Mesa Específica
+                  </label>
+                </div>
+
+                <div className="space-y-3">
+                  <div className="grid grid-cols-2 gap-2">
+                    <input
+                      type="date"
+                      className="p-2 border border-gray-300 w-full"
+                      value={blockZoneForm.date}
+                      onChange={e => setBlockZoneForm({ ...blockZoneForm, date: e.target.value })}
+                    />
+                    <select
+                      className="p-2 border border-gray-300 w-full"
+                      value={blockZoneForm.turn}
+                      onChange={e => setBlockZoneForm({ ...blockZoneForm, turn: e.target.value as Turn })}
+                    >
+                      <option value="lunch">Comida</option>
+                      <option value="dinner">Cena</option>
+                    </select>
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-2">
+                    <label className="text-xs font-bold text-gray-500">Zona</label>
+                    <select
+                      className="p-2 border border-gray-300 w-full"
+                      value={blockZoneForm.zoneId}
+                      onChange={e => {
+                        const newZoneId = parseInt(e.target.value);
+                        setBlockZoneForm({
+                          ...blockZoneForm,
+                          zoneId: newZoneId,
+                          tableId: blockZoneForm.tableId ? (tables.filter(t => t.zone_id === newZoneId)[0]?.id || 0) : undefined
+                        });
+                      }}
+                    >
+                      {zones.map(z => (
+                        <option key={z.id} value={z.id}>{(z as any).name || (z as any).name_es || (z as any).zone_name || 'Zona ' + z.id}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {blockZoneForm.tableId !== undefined && (
+                    <div className="grid grid-cols-1 gap-2">
+                      <label className="text-xs font-bold text-gray-500">Mesa (Capacidad)</label>
+                      <select
+                        className="p-2 border border-gray-300 w-full"
+                        value={blockZoneForm.tableId}
+                        onChange={e => setBlockZoneForm({ ...blockZoneForm, tableId: parseInt(e.target.value) })}
+                      >
+                        {tables
+                          .filter(t => t.zone_id === blockZoneForm.zoneId)
+                          .map(t => (
+                            <option key={t.id} value={t.id}>Mesa {(t as any).table_number || t.id} ({t.min_pax}-{t.max_pax} pax)</option>
+                          ))
+                        }
+                      </select>
+                    </div>
+                  )}
+
+                  <input
+                    type="text"
+                    placeholder="Razón (ej: Mantenimiento, Reservado VIP)"
+                    className="p-2 border border-gray-300 w-full"
+                    value={blockZoneForm.reason}
+                    onChange={e => setBlockZoneForm({ ...blockZoneForm, reason: e.target.value })}
+                  />
+
+                  <button type="button" onClick={handleBlockZone} className="w-full bg-gray-800 text-white px-4 py-2 text-xs font-bold uppercase hover:bg-black">
+                    {blockZoneForm.tableId ? 'Bloquear Mesa' : 'Bloquear Zona'}
+                  </button>
+                </div>
+              </div>
+
+              <div className="text-center">
+                <button type="button" onClick={() => setShowBlockModal(false)} className="text-gray-400 hover:text-gray-600 text-sm uppercase font-bold tracking-wider">Cerrar</button>
+              </div>
+            </div>
+          </div>
+        )
+      }
+
+      {/* DELETE CONFIRMATION MODAL */}
+      {
+        showDeleteConfirm && selectedBooking && (
+          <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
+            <div className="bg-white p-8 max-w-md w-full border-t-4 border-red-500 shadow-2xl">
+              <h3 className="text-xl font-serif font-bold mb-4 text-tav-black flex items-center gap-2">
+                <XCircle className="text-red-500" /> Confirmar Eliminación
+              </h3>
+              <p className="text-gray-700 mb-6">
+                {selectedBooking.status === 'blocked'
+                  ? '¿Eliminar este bloqueo permanentemente?'
+                  : '¿Estás seguro de eliminar esta reserva? Esta acción no se puede deshacer y liberará la mesa.'}
+              </p>
+              <div className="flex justify-end gap-4">
+                <button
+                  type="button"
+                  onClick={() => setShowDeleteConfirm(false)}
+                  className="px-4 py-2 text-gray-400 hover:text-gray-600 text-sm uppercase font-bold tracking-wider"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={confirmDelete}
+                  className="px-6 py-2 bg-red-500 text-white text-sm uppercase font-bold tracking-widest hover:bg-red-600"
+                >
+                  Eliminar
                 </button>
               </div>
             </div>
-
-            <div className="text-center">
-              <button type="button" onClick={() => setShowBlockModal(false)} className="text-gray-400 hover:text-gray-600 text-sm uppercase font-bold tracking-wider">Cerrar</button>
-            </div>
           </div>
-        </div>
-      )}
-
-      {/* DELETE CONFIRMATION MODAL */}
-      {showDeleteConfirm && selectedBooking && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
-          <div className="bg-white p-8 max-w-md w-full border-t-4 border-red-500 shadow-2xl">
-            <h3 className="text-xl font-serif font-bold mb-4 text-tav-black flex items-center gap-2">
-              <XCircle className="text-red-500" /> Confirmar Eliminación
-            </h3>
-            <p className="text-gray-700 mb-6">
-              {selectedBooking.status === 'blocked'
-                ? '¿Eliminar este bloqueo permanentemente?'
-                : '¿Estás seguro de eliminar esta reserva? Esta acción no se puede deshacer y liberará la mesa.'}
-            </p>
-            <div className="flex justify-end gap-4">
-              <button
-                type="button"
-                onClick={() => setShowDeleteConfirm(false)}
-                className="px-4 py-2 text-gray-400 hover:text-gray-600 text-sm uppercase font-bold tracking-wider"
-              >
-                Cancelar
-              </button>
-              <button
-                type="button"
-                onClick={confirmDelete}
-                className="px-6 py-2 bg-red-500 text-white text-sm uppercase font-bold tracking-widest hover:bg-red-600"
-              >
-                Eliminar
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
+        )
+      }
+    </div >
   );
 };
 

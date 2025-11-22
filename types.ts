@@ -1,5 +1,5 @@
 
-export type BookingStatus = 'pending' | 'confirmed' | 'completed' | 'cancelled' | 'waiting_list' | 'blocked';
+export type BookingStatus = 'pending' | 'confirmed' | 'completed' | 'cancelled' | 'waiting_list' | 'blocked' | 'pending_payment';
 
 export type Turn = 'lunch' | 'dinner';
 

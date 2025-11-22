@@ -147,7 +147,11 @@ const PublicBooking: React.FC<Props> = ({ lang }) => {
     setError(null);
 
     // 1️⃣ Crear la reserva en la base de datos
-    const result = await createBooking(formData, isWaitlist);
+    // Determine status: if waitlist -> waiting_list, if deposit enabled -> pending_payment, else -> confirmed
+    const statusToUse = isWaitlist ? 'waiting_list' : (depositEnabled ? 'pending_payment' : 'confirmed');
+    const dataWithStatus = { ...formData, status: statusToUse };
+
+    const result = await createBooking(dataWithStatus, isWaitlist);
 
     // 2️⃣ Si la reserva se creó correctamente
     if (result.success) {

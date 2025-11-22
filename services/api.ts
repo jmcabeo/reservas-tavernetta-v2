@@ -134,7 +134,7 @@ const checkAvailabilityFallback = async (date: string, turn: Turn, pax: number, 
  * Creates a booking or waiting list entry
  */
 export const createBooking = async (formData: BookingFormData, isWaitlist: boolean = false): Promise<{ success: boolean; error?: string; bookingId?: string }> => {
-  const status: BookingStatus = isWaitlist ? 'waiting_list' : 'confirmed';
+  const status: BookingStatus = formData.status || (isWaitlist ? 'waiting_list' : 'confirmed');
   const deposit = isWaitlist ? 0 : formData.pax * DEPOSIT_PER_PAX;
 
   // 1. If not waitlist, we process payment via Stripe

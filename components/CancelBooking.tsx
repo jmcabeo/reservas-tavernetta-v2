@@ -24,7 +24,11 @@ const CancelBooking = () => {
                     setStatus('success');
                 } else {
                     setStatus('error');
-                    setMessage('No se pudo cancelar la reserva. Es posible que ya esté cancelada o el enlace haya expirado.');
+                    if (result.error === 'LATE_CANCELLATION') {
+                        setMessage('Solo es posible cancelar con al menos 24 horas de antelación. Por favor, contacte con el restaurante.');
+                    } else {
+                        setMessage('No se pudo cancelar la reserva. Es posible que ya esté cancelada o el enlace haya expirado.');
+                    }
                 }
             } catch (error) {
                 setStatus('error');

@@ -429,6 +429,27 @@ export const updateSetting = async (key: string, value: string): Promise<boolean
 };
 
 export const cancelBookingByUUID = async (uuid: string): Promise<{ success: boolean; error?: string }> => {
+  // 1. Fetch booking details first
+  const { data: booking, error: fetchError } = await supabase
+    .from('bookings')
+    .select('booking_date, time')
+    .eq('uuid', uuid)
+    .single();
+
+  if (fetchError || !booking) {
+    return { success: false, error: 'Reserva no encontrada' };
+  }
+
+  // 2. Check 24h rule
+  const bookingDateTime = new Date(`${booking.booking_date}T${booking.time}`);
+  const now = new Date();
+  const diffInHours = (bookingDateTime.getTime() - now.getTime()) / (1000 * 60 * 60);
+
+  if (diffInHours < 24) {
+    return { success: false, error: 'LATE_CANCELLATION' };
+  }
+
+  // 3. Proceed with cancellation
   const { error } = await supabase
     .from('bookings')
     .update({ status: 'cancelled' })

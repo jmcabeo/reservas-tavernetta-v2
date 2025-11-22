@@ -428,3 +428,15 @@ export const updateSetting = async (key: string, value: string): Promise<boolean
   return true;
 };
 
+export const cancelBookingByUUID = async (uuid: string): Promise<{ success: boolean; error?: string }> => {
+  const { error } = await supabase
+    .from('bookings')
+    .update({ status: 'cancelled' })
+    .eq('uuid', uuid);
+
+  if (error) {
+    console.error('Error cancelling booking by UUID:', error);
+    return { success: false, error: error.message };
+  }
+  return { success: true };
+};

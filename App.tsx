@@ -4,6 +4,7 @@ import { supabase } from './services/supabaseClient';
 import PublicBooking from './components/PublicBooking';
 import AdminDashboard from './components/AdminDashboard';
 import Auth from './components/Auth';
+import CancelBooking from './components/CancelBooking';
 import { TRANSLATIONS } from './constants';
 
 function App() {
@@ -89,6 +90,7 @@ function App() {
       <Routes>
         {/* Public Route */}
         <Route path="/" element={<Home />} />
+        <Route path="/cancelar" element={<CancelBooking />} />
 
         {/* Login Route - Redirects to admin if already logged in */}
         <Route

@@ -15,7 +15,7 @@ const AdminDashboard: React.FC<Props> = ({ onLogout }) => {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [turnFilter, setTurnFilter] = useState<Turn | 'all'>('all');
-  const [statusFilter, setStatusFilter] = useState<BookingStatus | 'all' | 'waitlist'>('all');
+  const [statusFilter, setStatusFilter] = useState<BookingStatus | 'all' | 'waitlist' | 'cancelled'>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [viewMode, setViewMode] = useState<'table' | 'calendar'>('table');
   const [notification, setNotification] = useState<{ message: string, type: 'success' | 'error' } | null>(null);
@@ -441,6 +441,7 @@ const AdminDashboard: React.FC<Props> = ({ onLogout }) => {
               <button onClick={() => setStatusFilter('all')} className={`px-3 py-2 text-xs font-bold uppercase tracking-wider border transition-colors ${statusFilter === 'all' ? 'bg-tav-black text-white border-tav-black' : 'bg-white text-gray-500 hover:border-tav-gold'}`}>Todas</button>
               <button onClick={() => setStatusFilter('waitlist')} className={`px-3 py-2 text-xs font-bold uppercase tracking-wider border transition-colors ${statusFilter === 'waitlist' ? 'bg-amber-500 text-white border-amber-500' : 'bg-white text-gray-500 hover:border-amber-500'}`}>Lista de Espera</button>
               <button onClick={() => setStatusFilter('confirmed')} className={`px-3 py-2 text-xs font-bold uppercase tracking-wider border transition-colors ${statusFilter === 'confirmed' ? 'bg-green-500 text-white border-green-500' : 'bg-white text-gray-500 hover:border-green-500'}`}>Confirmadas</button>
+              <button onClick={() => setStatusFilter('cancelled')} className={`px-3 py-2 text-xs font-bold uppercase tracking-wider border transition-colors ${statusFilter === 'cancelled' ? 'bg-red-500 text-white border-red-500' : 'bg-white text-gray-500 hover:border-red-500'}`}>Canceladas</button>
             </div>
 
             <div className="flex gap-2">

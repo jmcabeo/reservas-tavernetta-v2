@@ -837,6 +837,7 @@ const AdminDashboard: React.FC<Props> = ({ onLogout }) => {
                     >
                       <option value="confirmed">CONFIRMADA</option>
                       <option value="waiting_list">LISTA DE ESPERA</option>
+                      <option value="pending_payment">PENDIENTE DE PAGO</option>
                       <option value="cancelled">CANCELADA</option>
                       <option value="completed">COMPLETADA</option>
                     </select>

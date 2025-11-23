@@ -427,6 +427,24 @@ const AdminDashboard: React.FC<Props> = ({ onLogout }) => {
                 <span className="text-xs font-bold uppercase block text-gray-500">Pax Cena</span>
                 <span className="text-2xl font-serif font-bold text-tav-black">{stats.dinner}</span>
               </div>
+
+              {/* Deposit Toggle Moved Here */}
+              <div className="flex flex-col justify-center items-center px-4 py-2 bg-gray-50 border border-gray-200 rounded-sm">
+                <span className="text-xs font-bold uppercase block text-gray-500 mb-1">Fianza</span>
+                <button
+                  onClick={async () => {
+                    const newValue = !depositEnabled;
+                    setDepositEnabled(newValue);
+                    await updateSetting('enable_deposit', String(newValue));
+                    showToast(`Fianza ${newValue ? 'activada' : 'desactivada'}`, 'success');
+                  }}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${depositEnabled ? 'bg-tav-gold' : 'bg-gray-300'}`}
+                >
+                  <span
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${depositEnabled ? 'translate-x-6' : 'translate-x-1'}`}
+                  />
+                </button>
+              </div>
             </div>
           </div>
 
@@ -464,23 +482,7 @@ const AdminDashboard: React.FC<Props> = ({ onLogout }) => {
 
 
 
-            <div className="flex gap-2 ml-auto items-center">
-              <div className="flex items-center gap-2 mr-4 bg-gray-50 px-3 py-2 border border-gray-200 rounded-sm">
-                <span className="text-xs font-bold uppercase text-gray-500">Fianza</span>
-                <button
-                  onClick={async () => {
-                    const newValue = !depositEnabled;
-                    setDepositEnabled(newValue);
-                    await updateSetting('enable_deposit', String(newValue));
-                    showToast(`Fianza ${newValue ? 'activada' : 'desactivada'}`, 'success');
-                  }}
-                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${depositEnabled ? 'bg-tav-gold' : 'bg-gray-300'}`}
-                >
-                  <span
-                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${depositEnabled ? 'translate-x-6' : 'translate-x-1'}`}
-                  />
-                </button>
-              </div>
+            <div className="flex gap-2 ml-auto items-center mt-4 md:mt-0">
 
               <button
                 type="button"

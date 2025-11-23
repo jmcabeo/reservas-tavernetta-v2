@@ -15,7 +15,7 @@ const AdminDashboard: React.FC<Props> = ({ onLogout }) => {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [turnFilter, setTurnFilter] = useState<Turn | 'all'>('all');
-  const [statusFilter, setStatusFilter] = useState<BookingStatus | 'all' | 'waitlist' | 'cancelled'>('all');
+  const [statusFilter, setStatusFilter] = useState<BookingStatus | 'all' | 'waitlist' | 'cancelled' | 'blocked'>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [viewMode, setViewMode] = useState<'table' | 'calendar'>('table');
   const [notification, setNotification] = useState<{ message: string, type: 'success' | 'error' } | null>(null);
@@ -51,6 +51,7 @@ const AdminDashboard: React.FC<Props> = ({ onLogout }) => {
 
   // Settings State
   const [depositEnabled, setDepositEnabled] = useState<boolean>(true);
+  const [closedWeekdays, setClosedWeekdays] = useState<number[]>([]);
 
   // Zone Blocking State
   const [zones, setZones] = useState<Zone[]>([]);
@@ -145,6 +146,9 @@ const AdminDashboard: React.FC<Props> = ({ onLogout }) => {
     const settings = await getSettings();
     // Default to true if not set
     setDepositEnabled(settings['enable_deposit'] !== 'false');
+    if (settings['closed_weekdays']) {
+      setClosedWeekdays(settings['closed_weekdays'].split(',').map(Number));
+    }
   };
 
   useEffect(() => {
@@ -152,6 +156,7 @@ const AdminDashboard: React.FC<Props> = ({ onLogout }) => {
     fetchZones();
     fetchTables();
     fetchSettings();
+    fetchBlockedDays(); // Added this call
 
     // Subscribe to realtime changes
     const subscription = supabase
@@ -296,6 +301,7 @@ const AdminDashboard: React.FC<Props> = ({ onLogout }) => {
       return;
     }
     console.log('Blocking Zone/Table:', blockZoneForm);
+    // alert(`Intentando bloquear: Zona ${blockZoneForm.zoneId}, Mesa ${blockZoneForm.tableId || 'N/A'}, Razón: ${blockZoneForm.reason}`); // DEBUG
     try {
       const result = await createBlockingBooking(
         blockZoneForm.date,
@@ -476,6 +482,7 @@ const AdminDashboard: React.FC<Props> = ({ onLogout }) => {
                   <option value="waitlist">Lista de Espera</option>
                   <option value="confirmed">Confirmadas</option>
                   <option value="cancelled">Canceladas</option>
+                  <option value="blocked">Bloqueos</option>
                 </select>
               </div>
             </div>
@@ -895,7 +902,38 @@ const AdminDashboard: React.FC<Props> = ({ onLogout }) => {
               <div className="space-y-6">
                 {/* Block Day */}
                 <div className="bg-gray-50 p-4 border border-gray-200">
-                  <h4 className="text-sm font-bold uppercase mb-2 text-gray-600">Bloquear Día Completo</h4>
+                  <h4 className="text-sm font-bold uppercase mb-2 text-gray-600">Días de Descanso Semanal (Recurrente)</h4>
+                  <p className="text-xs text-gray-500 mb-4">Selecciona los días de la semana que el restaurante cierra siempre.</p>
+                  <div className="flex flex-wrap gap-2 mb-4">
+                    {['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'].map((dayName, index) => {
+                      const isClosed = closedWeekdays.includes(index);
+                      return (
+                        <button
+                          key={index}
+                          type="button"
+                          onClick={async () => {
+                            let newClosed = [...closedWeekdays];
+                            if (isClosed) {
+                              newClosed = newClosed.filter(d => d !== index);
+                            } else {
+                              newClosed.push(index);
+                            }
+                            setClosedWeekdays(newClosed);
+                            await updateSetting('closed_weekdays', newClosed.join(','));
+                            showToast('Días de descanso actualizados', 'success');
+                          }}
+                          className={`px-3 py-2 text-xs font-bold uppercase border rounded transition-colors ${isClosed ? 'bg-red-500 text-white border-red-500' : 'bg-white text-gray-500 border-gray-300 hover:border-red-300'}`}
+                        >
+                          {dayName}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="bg-gray-50 p-4 border border-gray-200">
+                  <h4 className="text-sm font-bold uppercase mb-2 text-gray-600">Bloquear Día Específico (Excepción)</h4>
+                  <p className="text-xs text-gray-500 mb-4">Selecciona una fecha concreta para cerrarla (ej: festivo).</p>
                   <div className="flex gap-2 mb-4">
                     <input
                       type="date"
@@ -903,13 +941,13 @@ const AdminDashboard: React.FC<Props> = ({ onLogout }) => {
                       value={newBlockDate}
                       onChange={e => setNewBlockDate(e.target.value)}
                     />
-                    <button type="button" onClick={handleBlockDay} className="bg-red-500 text-white px-4 py-2 text-xs font-bold uppercase hover:bg-red-600">Bloquear</button>
+                    <button type="button" onClick={handleBlockDay} className="bg-red-500 text-white px-4 py-2 text-xs font-bold uppercase hover:bg-red-600">Bloquear Fecha</button>
                   </div>
 
                   <div className="space-y-2">
-                    <p className="text-xs text-gray-400 uppercase font-bold">Días Bloqueados (Futuros)</p>
+                    <p className="text-xs text-gray-400 uppercase font-bold">Fechas Bloqueadas</p>
                     {blockedDays.length === 0 ? (
-                      <p className="text-sm italic text-gray-400">No hay días bloqueados.</p>
+                      <p className="text-sm italic text-gray-400">No hay fechas bloqueadas.</p>
                     ) : (
                       <div className="flex flex-wrap gap-2">
                         {blockedDays.map(d => (

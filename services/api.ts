@@ -21,6 +21,22 @@ export const checkAvailability = async (date: string, turn: Turn, pax: number): 
       return []; // Date is blocked
     }
 
+    // 0.a PRE-CHECK: Check Recurring Closed Weekdays
+    const { data: settingsData } = await supabase
+      .from('settings')
+      .select('value')
+      .eq('key', 'closed_weekdays')
+      .maybeSingle();
+
+    if (settingsData && settingsData.value) {
+      const closedDays = settingsData.value.split(',').map(Number); // 0=Sun, 1=Mon...
+      const dateObj = new Date(date);
+      const dayOfWeek = dateObj.getDay();
+      if (closedDays.includes(dayOfWeek)) {
+        return []; // Date is on a closed weekday
+      }
+    }
+
     // 0.b PRE-CHECK: Check for Blocked Zones (Bookings with status 'blocked')
     const { data: blockedZones } = await supabase
       .from('bookings')
@@ -346,18 +362,18 @@ export const createBlockingBooking = async (date: string, turn: Turn, zoneId: nu
     booking_date: date,
     turn: turn,
     time: turn === 'lunch' ? '13:00' : '20:00', // Default time for block
-    pax: 100, // High pax to ensure it blocks capacity if logic uses sum(pax)
+    pax: 10, // Reduced from 100 to avoid potential constraint issues
     zone_id: zoneId,
     customer_name: `BLOQUEO: ${reason}`,
-    customer_email: 'blocked@admin.com',
+    customer_email: 'bloqueo@admin.com', // Valid email format
     customer_phone: '000000000',
     status: 'blocked',
     deposit_amount: 0
   };
 
-  if (tableId) {
+  if (tableId && tableId > 0) {
     bookingData.table_id = tableId;
-    bookingData.pax = 8; // Set a reasonable pax for a single table block, or keep high if we want to be safe
+    bookingData.pax = 4; // Reasonable pax for table block
     bookingData.customer_name = `BLOQUEO MESA ${tableId}: ${reason}`;
   }
 

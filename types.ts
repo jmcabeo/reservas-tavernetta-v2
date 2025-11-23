@@ -32,7 +32,7 @@ export interface Booking {
   customer_email: string;
   customer_phone: string;
   comments?: string;
-  table_id?: number;
+  assigned_table_id?: number;
   zone_id?: number;
   payment_id?: string; // Stripe Payment Intent ID
   deposit_amount: number;

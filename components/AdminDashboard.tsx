@@ -301,7 +301,13 @@ const AdminDashboard: React.FC<Props> = ({ onLogout }) => {
       return;
     }
     console.log('Blocking Zone/Table:', blockZoneForm);
-    // alert(`Intentando bloquear: Zona ${blockZoneForm.zoneId}, Mesa ${blockZoneForm.tableId || 'N/A'}, Razón: ${blockZoneForm.reason}`); // DEBUG
+
+    // Validate Table ID if in table blocking mode
+    if (blockZoneForm.tableId !== undefined && (blockZoneForm.tableId <= 0 || isNaN(blockZoneForm.tableId))) {
+      showToast("Error: Selecciona una mesa válida", "error");
+      return;
+    }
+
     try {
       const result = await createBlockingBooking(
         blockZoneForm.date,
@@ -318,13 +324,11 @@ const AdminDashboard: React.FC<Props> = ({ onLogout }) => {
       } else {
         // result is the error message
         showToast("Error: " + result, "error");
-        alert("Error detallado: " + result);
       }
     } catch (error) {
       console.error('Error blocking:', error);
       const msg = "Error al bloquear: " + ((error as any).message || JSON.stringify(error));
       showToast(msg, "error");
-      alert(msg); // Fallback to ensure user sees the error
     }
   };
 
@@ -981,7 +985,10 @@ const AdminDashboard: React.FC<Props> = ({ onLogout }) => {
                       type="radio"
                       name="blockType"
                       checked={blockZoneForm.tableId !== undefined}
-                      onChange={() => setBlockZoneForm({ ...blockZoneForm, tableId: tables.filter(t => t.zone_id === blockZoneForm.zoneId)[0]?.id || 0 })}
+                      onChange={() => {
+                        const firstTableId = tables.filter(t => t.zone_id === blockZoneForm.zoneId)[0]?.id;
+                        setBlockZoneForm({ ...blockZoneForm, tableId: firstTableId || 0 });
+                      }}
                     />
                     Bloquear Mesa Específica
                   </label>
@@ -1012,10 +1019,11 @@ const AdminDashboard: React.FC<Props> = ({ onLogout }) => {
                       value={blockZoneForm.zoneId}
                       onChange={e => {
                         const newZoneId = parseInt(e.target.value);
+                        const firstTableId = tables.filter(t => t.zone_id === newZoneId)[0]?.id;
                         setBlockZoneForm({
                           ...blockZoneForm,
                           zoneId: newZoneId,
-                          tableId: blockZoneForm.tableId ? (tables.filter(t => t.zone_id === newZoneId)[0]?.id || 0) : undefined
+                          tableId: blockZoneForm.tableId !== undefined ? (firstTableId || 0) : undefined
                         });
                       }}
                     >

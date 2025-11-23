@@ -103,12 +103,12 @@ const checkAvailabilityFallback = async (date: string, turn: Turn, pax: number, 
     // NOTE: Using 'booking_date' column
     const { data: existingBookings } = await supabase
       .from('bookings')
-      .select('table_id')
+      .select('assigned_table_id')
       .eq('booking_date', date)
       .eq('turn', turn)
       .not('status', 'in', '("cancelled","waiting_list")');
 
-    const bookedTableIds = new Set((existingBookings || []).map((b: any) => b.table_id).filter(Boolean));
+    const bookedTableIds = new Set((existingBookings || []).map((b: any) => b.assigned_table_id).filter(Boolean));
 
     // 5. Calculate Availability per Zone
     const availabilityMap = new Map<number, number>();
@@ -372,7 +372,7 @@ export const createBlockingBooking = async (date: string, turn: Turn, zoneId: nu
   };
 
   if (tableId && tableId > 0) {
-    bookingData.table_id = tableId;
+    bookingData.assigned_table_id = tableId;
     bookingData.pax = 4; // Reasonable pax for table block
     bookingData.customer_name = `BLOQUEO MESA ${tableId}: ${reason}`;
   }

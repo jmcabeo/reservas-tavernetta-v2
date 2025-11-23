@@ -430,35 +430,36 @@ const AdminDashboard: React.FC<Props> = ({ onLogout }) => {
             </div>
           </div>
 
-          <div className="flex flex-wrap gap-4 items-center">
-            <div className="flex gap-2">
-              <button onClick={() => setTurnFilter('all')} className={`px-4 py-2 text-xs font-bold uppercase tracking-wider border transition-colors ${turnFilter === 'all' ? 'bg-tav-black text-white border-tav-black' : 'bg-white text-gray-500 hover:border-tav-gold'}`}>Todos</button>
-              <button onClick={() => setTurnFilter('lunch')} className={`px-4 py-2 text-xs font-bold uppercase tracking-wider border transition-colors ${turnFilter === 'lunch' ? 'bg-tav-gold text-tav-black border-tav-gold' : 'bg-white text-gray-500 hover:border-tav-gold'}`}>Comida</button>
-              <button onClick={() => setTurnFilter('dinner')} className={`px-4 py-2 text-xs font-bold uppercase tracking-wider border transition-colors ${turnFilter === 'dinner' ? 'bg-gray-800 text-white border-gray-800' : 'bg-white text-gray-500 hover:border-tav-gold'}`}>Cena</button>
-            </div>
+          <div className="flex flex-col md:flex-row gap-4 items-start md:items-center justify-between">
+            <div className="flex flex-wrap gap-4 w-full md:w-auto">
+              {/* Turn Filter Select */}
+              <div className="w-full md:w-auto">
+                <label className="text-xs font-bold uppercase text-gray-500 block mb-1 md:hidden">Turno</label>
+                <select
+                  value={turnFilter}
+                  onChange={(e) => setTurnFilter(e.target.value as any)}
+                  className="w-full md:w-auto px-3 py-2 text-xs font-bold uppercase tracking-wider border border-gray-300 bg-white focus:border-tav-gold outline-none"
+                >
+                  <option value="all">Todos los Turnos</option>
+                  <option value="lunch">Comida</option>
+                  <option value="dinner">Cena</option>
+                </select>
+              </div>
 
-            <div className="flex gap-2">
-              <button onClick={() => setStatusFilter('all')} className={`px-3 py-2 text-xs font-bold uppercase tracking-wider border transition-colors ${statusFilter === 'all' ? 'bg-tav-black text-white border-tav-black' : 'bg-white text-gray-500 hover:border-tav-gold'}`}>Todas</button>
-              <button onClick={() => setStatusFilter('waitlist')} className={`px-3 py-2 text-xs font-bold uppercase tracking-wider border transition-colors ${statusFilter === 'waitlist' ? 'bg-amber-500 text-white border-amber-500' : 'bg-white text-gray-500 hover:border-amber-500'}`}>Lista de Espera</button>
-              <button onClick={() => setStatusFilter('confirmed')} className={`px-3 py-2 text-xs font-bold uppercase tracking-wider border transition-colors ${statusFilter === 'confirmed' ? 'bg-green-500 text-white border-green-500' : 'bg-white text-gray-500 hover:border-green-500'}`}>Confirmadas</button>
-              <button onClick={() => setStatusFilter('cancelled')} className={`px-3 py-2 text-xs font-bold uppercase tracking-wider border transition-colors ${statusFilter === 'cancelled' ? 'bg-red-500 text-white border-red-500' : 'bg-white text-gray-500 hover:border-red-500'}`}>Canceladas</button>
-            </div>
-
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={() => setViewMode('table')}
-                className={`px-3 py-2 text-xs font-bold uppercase tracking-wider border transition-colors flex items-center gap-2 ${viewMode === 'table' ? 'bg-tav-black text-white border-tav-black' : 'bg-white text-gray-500 hover:border-tav-gold'}`}
-              >
-                <Users className="w-4 h-4" /> Tabla
-              </button>
-              <button
-                type="button"
-                onClick={() => setViewMode('calendar')}
-                className={`px-3 py-2 text-xs font-bold uppercase tracking-wider border transition-colors flex items-center gap-2 ${viewMode === 'calendar' ? 'bg-tav-black text-white border-tav-black' : 'bg-white text-gray-500 hover:border-tav-gold'}`}
-              >
-                <CalendarIcon className="w-4 h-4" /> Calendario
-              </button>
+              {/* Status Filter Select */}
+              <div className="w-full md:w-auto">
+                <label className="text-xs font-bold uppercase text-gray-500 block mb-1 md:hidden">Estado</label>
+                <select
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value as any)}
+                  className="w-full md:w-auto px-3 py-2 text-xs font-bold uppercase tracking-wider border border-gray-300 bg-white focus:border-tav-gold outline-none"
+                >
+                  <option value="all">Todos los Estados</option>
+                  <option value="waitlist">Lista de Espera</option>
+                  <option value="confirmed">Confirmadas</option>
+                  <option value="cancelled">Canceladas</option>
+                </select>
+              </div>
             </div>
 
 

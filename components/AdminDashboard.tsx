@@ -920,6 +920,23 @@ const AdminDashboard: React.FC<Props> = ({ onLogout }) => {
                         {tables
                           .filter(t => t.zone_id === (manualForm.zone_id || 1))
                           .filter(t => manualForm.pax >= t.min_pax && manualForm.pax <= t.max_pax)
+                          .filter(t => {
+                            // Filter out occupied tables
+                            // We use the 'bookings' state which contains bookings for the currently selected date in the dashboard
+                            // WARNING: If manualForm.date is different from date (dashboard state), this check might be inaccurate unless we fetch bookings for that date.
+                            // Assuming admin is working on the selected date context.
+
+                            if (manualForm.date !== date) return true; // Cannot validate if date differs without fetching
+
+                            const isOccupied = bookings.some(b =>
+                              b.booking_date === manualForm.date &&
+                              b.turn === manualForm.turn &&
+                              b.status !== 'cancelled' &&
+                              b.status !== 'waiting_list' &&
+                              b.assigned_table_id === t.id
+                            );
+                            return !isOccupied;
+                          })
                           .map(t => (
                             <option key={t.id} value={t.id}>
                               Mesa {t.table_number || t.id} ({t.min_pax}-{t.max_pax} personas)

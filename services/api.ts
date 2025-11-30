@@ -103,12 +103,18 @@ const checkAvailabilityFallback = async (date: string, turn: Turn, pax: number, 
     // NOTE: Using 'booking_date' column
     const { data: existingBookings } = await supabase
       .from('bookings')
-      .select('assigned_table_id')
+      .select('assigned_table_id, consumes_capacity') // Fetch consumes_capacity
       .eq('booking_date', date)
       .eq('turn', turn)
       .not('status', 'in', '("cancelled","waiting_list")');
 
-    const bookedTableIds = new Set((existingBookings || []).map((b: any) => b.assigned_table_id).filter(Boolean));
+    // Filter out bookings that explicitly don't consume capacity
+    // Default to true if null (backward compatibility)
+    const activeBookings = (existingBookings || []).filter((b: any) =>
+      b.consumes_capacity !== false
+    );
+
+    const bookedTableIds = new Set(activeBookings.map((b: any) => b.assigned_table_id).filter(Boolean));
 
     // 5. Calculate Availability per Zone
     const availabilityMap = new Map<number, number>();

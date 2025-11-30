@@ -176,6 +176,7 @@ export const createBooking = async (formData: BookingFormData, isWaitlist: boole
         time: formData.time,
         pax: formData.pax,
         zone_id: formData.zone_id,
+        zone_name: formData.zone_name,      // Add zone name
         customer_name: formData.name,
         customer_email: formData.email,
         customer_phone: formData.phone,

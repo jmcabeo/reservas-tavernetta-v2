@@ -236,7 +236,8 @@ const AdminDashboard: React.FC<Props> = ({ onLogout }) => {
       phone: booking.customer_phone,
       comments: booking.comments,
       deposit_amount: booking.deposit_amount,
-      status: booking.status
+      status: booking.status,
+      consumes_capacity: booking.consumes_capacity ?? true
     });
     setSelectedBooking(booking);
     setIsEditing(true);
@@ -515,7 +516,8 @@ const AdminDashboard: React.FC<Props> = ({ onLogout }) => {
                     email: '',
                     phone: '',
                     deposit_amount: 0,
-                    status: 'confirmed'
+                    status: 'confirmed',
+                    consumes_capacity: true
                   });
                   setShowManualModal(true);
                 }}
@@ -874,6 +876,55 @@ const AdminDashboard: React.FC<Props> = ({ onLogout }) => {
                     value={manualForm.comments || ''}
                     onChange={e => setManualForm({ ...manualForm, comments: e.target.value })}
                   />
+                </div>
+
+                {/* Capacity Consumption Toggle */}
+                <div className="bg-amber-50 border border-amber-200 rounded p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex-1">
+                      <label className="text-sm font-bold text-gray-700 block mb-1">Asignar Mesa y Consumir Capacidad</label>
+                      <p className="text-xs text-gray-500">
+                        {(manualForm.consumes_capacity ?? true)
+                          ? 'Activado: Selecciona una mesa disponible. La reserva contará para la disponibilidad.'
+                          : 'Desactivado: Reserva libre sin mesa asignada. NO afecta la disponibilidad.'}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setManualForm({ ...manualForm, consumes_capacity: !manualForm.consumes_capacity, assigned_table_id: undefined })}
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ml-4 ${(manualForm.consumes_capacity ?? true) ? 'bg-tav-gold' : 'bg-gray-300'}`}
+                    >
+                      <span
+                        className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${(manualForm.consumes_capacity ?? true) ? 'translate-x-6' : 'translate-x-1'}`}
+                      />
+                    </button>
+                  </div>
+
+                  {/* Table Selector - Only shown when toggle is ON */}
+                  {(manualForm.consumes_capacity ?? true) && (
+                    <div className="mt-3 pt-3 border-t border-amber-300">
+                      <label className="text-xs font-bold text-gray-700 uppercase block mb-2">Mesa Asignada</label>
+                      <select
+                        className="w-full p-2 border border-gray-300 rounded focus:border-tav-gold focus:ring-1 focus:ring-tav-gold outline-none bg-white"
+                        value={manualForm.assigned_table_id || ''}
+                        onChange={e => setManualForm({ ...manualForm, assigned_table_id: e.target.value ? parseInt(e.target.value) : undefined })}
+                      >
+                        <option value="">Seleccionar mesa...</option>
+                        {tables
+                          .filter(t => t.zone_id === (manualForm.zone_id || 1))
+                          .filter(t => manualForm.pax >= t.min_pax && manualForm.pax <= t.max_pax)
+                          .map(t => (
+                            <option key={t.id} value={t.id}>
+                              Mesa {t.table_number || t.id} ({t.min_pax}-{t.max_pax} personas)
+                            </option>
+                          ))
+                        }
+                      </select>
+                      {tables.filter(t => t.zone_id === (manualForm.zone_id || 1)).filter(t => manualForm.pax >= t.min_pax && manualForm.pax <= t.max_pax).length === 0 && (
+                        <p className="text-xs text-amber-700 mt-2">⚠️ No hay mesas disponibles en esta zona para {manualForm.pax} personas</p>
+                      )}
+                    </div>
+                  )}
                 </div>
                 <div className="flex justify-between items-center mt-8">
                   <button

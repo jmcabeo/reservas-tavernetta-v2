@@ -149,7 +149,12 @@ const PublicBooking: React.FC<Props> = ({ lang }) => {
     // 1️⃣ Crear la reserva en la base de datos
     // Determine status: if waitlist -> waiting_list, if deposit enabled -> pending_payment, else -> confirmed
     const statusToUse = isWaitlist ? 'waiting_list' : (depositEnabled ? 'pending_payment' : 'confirmed');
-    const dataWithStatus = { ...formData, status: statusToUse };
+
+    // Get zone name from the zones array
+    const selectedZone = zones.find(z => z.zone_id === formData.zone_id);
+    const zoneName = selectedZone ? selectedZone.zone_name_es : '';
+
+    const dataWithStatus = { ...formData, status: statusToUse, zone_name: zoneName };
 
     const result = await createBooking(dataWithStatus, isWaitlist);
 
@@ -171,6 +176,10 @@ const PublicBooking: React.FC<Props> = ({ lang }) => {
 
       // 4️⃣ Si hay fianza, llamamos al webhook de n8n
       try {
+        // Get zone name from the zones array
+        const selectedZone = zones.find(z => z.zone_id === formData.zone_id);
+        const zoneName = selectedZone ? selectedZone.zone_name_es : '';
+
         const payload = {
           bookingId: result.bookingId,
           amount: formData.pax * DEPOSIT_PER_PAX, // importe de la fianza
@@ -180,6 +189,8 @@ const PublicBooking: React.FC<Props> = ({ lang }) => {
           date: formData.date,
           time: formData.time,
           pax: formData.pax,
+          zone_id: formData.zone_id,
+          zone_name: zoneName,
         };
 
         const resp = await fetch('https://n8n.captialeads.com/webhook/crear-pago', {

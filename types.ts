@@ -37,6 +37,7 @@ export interface Booking {
   payment_id?: string; // Stripe Payment Intent ID
   deposit_amount: number;
   is_manual?: boolean;
+  consumes_capacity?: boolean; // Whether this booking affects availability
   // Joined data
   zones?: {
     name_es: string;
@@ -63,12 +64,14 @@ export interface BookingFormData {
   time: string | null;
   pax: number;
   zone_id: number | null;
+  zone_name?: string;
   name: string;
   email: string;
   phone: string;
   comments?: string;
   deposit_amount?: number;
   status?: BookingStatus;
+  consumes_capacity?: boolean;
 }
 
 export interface Translation {

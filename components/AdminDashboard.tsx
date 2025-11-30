@@ -70,6 +70,52 @@ const AdminDashboard: React.FC<Props> = ({ onLogout }) => {
     tableId: undefined
   });
 
+  // New state for dynamic table availability in manual form
+  const [occupiedTables, setOccupiedTables] = useState<Set<number>>(new Set());
+
+  // Effect to fetch occupied tables when manual form date/turn changes
+  useEffect(() => {
+    const fetchOccupiedTables = async () => {
+      if (!showManualModal && !isEditing) return;
+
+      // If date matches dashboard date, use existing bookings state to avoid extra fetch
+      if (manualForm.date === date) {
+        const occupied = new Set(
+          bookings
+            .filter(b =>
+              b.turn === manualForm.turn &&
+              b.status !== 'cancelled' &&
+              b.status !== 'waiting_list' &&
+              b.assigned_table_id
+            )
+            .map(b => b.assigned_table_id!)
+        );
+        setOccupiedTables(occupied);
+        return;
+      }
+
+      // Otherwise fetch bookings for the specific date
+      try {
+        const bookingsForDate = await getBookingsByDate(manualForm.date);
+        const occupied = new Set(
+          bookingsForDate
+            .filter(b =>
+              b.turn === manualForm.turn &&
+              b.status !== 'cancelled' &&
+              b.status !== 'waiting_list' &&
+              b.assigned_table_id
+            )
+            .map(b => b.assigned_table_id!)
+        );
+        setOccupiedTables(occupied);
+      } catch (err) {
+        console.error("Error fetching occupied tables:", err);
+      }
+    };
+
+    fetchOccupiedTables();
+  }, [manualForm.date, manualForm.turn, showManualModal, isEditing, date, bookings]);
+
   const showToast = (message: string, type: 'success' | 'error') => {
     setNotification({ message, type });
     setTimeout(() => setNotification(null), 3000);
@@ -921,21 +967,8 @@ const AdminDashboard: React.FC<Props> = ({ onLogout }) => {
                           .filter(t => t.zone_id === (manualForm.zone_id || 1))
                           .filter(t => manualForm.pax >= t.min_pax && manualForm.pax <= t.max_pax)
                           .filter(t => {
-                            // Filter out occupied tables
-                            // We use the 'bookings' state which contains bookings for the currently selected date in the dashboard
-                            // WARNING: If manualForm.date is different from date (dashboard state), this check might be inaccurate unless we fetch bookings for that date.
-                            // Assuming admin is working on the selected date context.
-
-                            if (manualForm.date !== date) return true; // Cannot validate if date differs without fetching
-
-                            const isOccupied = bookings.some(b =>
-                              b.booking_date === manualForm.date &&
-                              b.turn === manualForm.turn &&
-                              b.status !== 'cancelled' &&
-                              b.status !== 'waiting_list' &&
-                              b.assigned_table_id === t.id
-                            );
-                            return !isOccupied;
+                            // Filter out occupied tables using the dynamic state
+                            return !occupiedTables.has(t.id);
                           })
                           .map(t => (
                             <option key={t.id} value={t.id}>

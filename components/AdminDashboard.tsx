@@ -805,6 +805,11 @@ const AdminDashboard: React.FC<Props> = ({ onLogout }) => {
                   className="w-full border-b p-2 focus:border-tav-gold outline-none"
                   value={manualForm.name} onChange={e => setManualForm({ ...manualForm, name: e.target.value })}
                 />
+                <input
+                  type="email" placeholder="Email Cliente"
+                  className="w-full border-b p-2 focus:border-tav-gold outline-none"
+                  value={manualForm.email} onChange={e => setManualForm({ ...manualForm, email: e.target.value })}
+                />
                 <div className="grid grid-cols-2 gap-4">
                   <input
                     type="tel" placeholder="Teléfono" required

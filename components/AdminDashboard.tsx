@@ -244,8 +244,18 @@ const AdminDashboard: React.FC<Props> = ({ onLogout }) => {
 
   const handleManualSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Mark as manual booking from admin
-    const manualBookingData = { ...manualForm, is_manual: true };
+
+    // Extract zone name from zones array
+    const selectedZone = zones.find(z => z.id === manualForm.zone_id);
+    const zoneName = selectedZone ? (selectedZone.name_es || selectedZone.name) : '';
+
+    // Mark as manual booking from admin and include zone name
+    const manualBookingData = {
+      ...manualForm,
+      is_manual: true,
+      zone_name: zoneName
+    };
+
     const res = await createBooking(manualBookingData, false);
     if (res.success) {
       showToast('Reserva manual creada correctamente', 'success');

@@ -102,12 +102,16 @@ function App() {
         <Route
           path="/admin"
           element={
-            <AdminDashboard
-              onLogout={async () => {
-                await supabase.auth.signOut();
-                navigate('/');
-              }}
-            />
+            session ? (
+              <AdminDashboard
+                onLogout={async () => {
+                  await supabase.auth.signOut();
+                  navigate('/');
+                }}
+              />
+            ) : (
+              <Navigate to="/login" />
+            )
           }
         />
       </Routes>

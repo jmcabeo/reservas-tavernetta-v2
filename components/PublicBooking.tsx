@@ -191,6 +191,7 @@ const PublicBooking: React.FC<Props> = ({ lang }) => {
           pax: formData.pax,
           zone_id: formData.zone_id,
           zone_name: zoneName,
+          is_manual: false, // Client booking
         };
 
         const resp = await fetch('https://n8n.captialeads.com/webhook/crear-pago', {

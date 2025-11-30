@@ -183,6 +183,7 @@ export const createBooking = async (formData: BookingFormData, isWaitlist: boole
         comments: formData.comments,
         status: status,
         deposit_amount: deposit,
+        is_manual: formData.is_manual || false, // Track if created by admin
         stripe_payment_intent_id: !isWaitlist ? `pi_sim_${Date.now()}` : null
       }
     ]);

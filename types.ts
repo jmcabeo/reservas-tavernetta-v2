@@ -72,6 +72,7 @@ export interface BookingFormData {
   deposit_amount?: number;
   status?: BookingStatus;
   consumes_capacity?: boolean;
+  is_manual?: boolean;
 }
 
 export interface Translation {

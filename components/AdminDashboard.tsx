@@ -198,7 +198,9 @@ const AdminDashboard: React.FC<Props> = ({ onLogout }) => {
 
   const handleManualSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const res = await createBooking(manualForm, false);
+    // Mark as manual booking from admin
+    const manualBookingData = { ...manualForm, is_manual: true };
+    const res = await createBooking(manualBookingData, false);
     if (res.success) {
       showToast('Reserva manual creada correctamente', 'success');
       setShowManualModal(false);

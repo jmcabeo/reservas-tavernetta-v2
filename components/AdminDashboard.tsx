@@ -78,35 +78,25 @@ const AdminDashboard: React.FC<Props> = ({ onLogout }) => {
     const fetchOccupiedTables = async () => {
       if (!showManualModal && !isEditing) return;
 
-      // If date matches dashboard date, use existing bookings state to avoid extra fetch
-      if (manualForm.date === date) {
-        const occupied = new Set(
-          bookings
-            .filter(b =>
-              b.turn === manualForm.turn &&
-              b.status !== 'cancelled' &&
-              b.status !== 'waiting_list' &&
-              b.assigned_table_id
-            )
-            .map(b => b.assigned_table_id!)
-        );
-        setOccupiedTables(occupied);
-        return;
-      }
-
-      // Otherwise fetch bookings for the specific date
+      // Always fetch fresh bookings for the specific date to ensure accuracy
+      // This prevents issues where the local 'bookings' state might be stale (e.g. realtime lag)
       try {
+        console.log(`[Admin] Fetching occupied tables for ${manualForm.date} ${manualForm.turn}`);
         const bookingsForDate = await getBookingsByDate(manualForm.date);
+        console.log('[Admin] Bookings for date:', bookingsForDate);
+
         const occupied = new Set(
           bookingsForDate
-            .filter(b =>
-              b.turn === manualForm.turn &&
-              b.status !== 'cancelled' &&
-              b.status !== 'waiting_list' &&
-              b.assigned_table_id
-            )
-            .map(b => b.assigned_table_id!)
+            .filter(b => {
+              const isTurn = b.turn === manualForm.turn;
+              const isStatus = b.status !== 'cancelled' && b.status !== 'waiting_list';
+              const hasTable = !!b.assigned_table_id;
+              // console.log(`Booking ${b.id}: Turn=${isTurn}, Status=${isStatus}, Table=${b.assigned_table_id}`);
+              return isTurn && isStatus && hasTable;
+            })
+            .map(b => Number(b.assigned_table_id)) // Force number conversion
         );
+        console.log('[Admin] Occupied Table IDs:', Array.from(occupied));
         setOccupiedTables(occupied);
       } catch (err) {
         console.error("Error fetching occupied tables:", err);
@@ -246,7 +236,7 @@ const AdminDashboard: React.FC<Props> = ({ onLogout }) => {
     e.preventDefault();
 
     // Extract zone name from zones array
-    const selectedZone = zones.find(z => z.id === manualForm.zone_id);
+    const selectedZone = zones.find(z => z.id === Number(manualForm.zone_id));
     const zoneName = selectedZone ? (selectedZone.name_es || selectedZone.name) : '';
 
     // Mark as manual booking from admin and include zone name

@@ -73,6 +73,7 @@ export interface BookingFormData {
   status?: BookingStatus;
   consumes_capacity?: boolean;
   is_manual?: boolean;
+  assigned_table_id?: number;
 }
 
 export interface Translation {

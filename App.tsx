@@ -5,13 +5,41 @@ import PublicBooking from './components/PublicBooking';
 import AdminDashboard from './components/AdminDashboard';
 import Auth from './components/Auth';
 import CancelBooking from './components/CancelBooking';
+import Maintenance from './components/Maintenance';
 import { TRANSLATIONS } from './constants';
 
 function App() {
   const [session, setSession] = useState<any>(null);
   const [lang, setLang] = useState<'es' | 'en'>('es');
   const [loading, setLoading] = useState(true);
+
   const navigate = useNavigate();
+
+  // Maintenance Mode Logic
+  const [isMaintenance, setIsMaintenance] = useState(() => {
+    // Check if we are in a browser environment
+    if (typeof window === 'undefined') return true;
+
+    const params = new URLSearchParams(window.location.search);
+    const bypassParam = params.get('bypass');
+    const storedBypass = localStorage.getItem('tav_maintenance_bypass');
+    const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+
+    if (bypassParam === 'tavernetta2024') {
+      localStorage.setItem('tav_maintenance_bypass', 'true');
+      return false;
+    }
+
+    return !(storedBypass === 'true' || isLocal);
+  });
+
+  useEffect(() => {
+    // Clean URL if bypass was used
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('bypass') === 'tavernetta2024') {
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, []);
 
   useEffect(() => {
     // Get initial session
@@ -31,6 +59,12 @@ function App() {
   }, []);
 
   const t = TRANSLATIONS[lang];
+
+
+
+  if (isMaintenance) {
+    return <Maintenance />;
+  }
 
   if (loading) {
     return (

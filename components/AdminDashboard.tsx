@@ -106,6 +106,38 @@ const AdminDashboard: React.FC<Props> = ({ onLogout }) => {
     fetchOccupiedTables();
   }, [manualForm.date, manualForm.turn, showManualModal, isEditing, date, bookings]);
 
+  // New state for occupied tables in Block Modal
+  const [occupiedTablesBlock, setOccupiedTablesBlock] = useState<Set<number>>(new Set());
+
+  // Effect to fetch occupied tables when block modal date/turn changes
+  useEffect(() => {
+    const fetchOccupiedTablesBlock = async () => {
+      if (!showBlockModal) return;
+
+      try {
+        console.log(`[Admin Block] Fetching occupied tables for ${blockZoneForm.date} ${blockZoneForm.turn}`);
+        const bookingsForDate = await getBookingsByDate(blockZoneForm.date);
+
+        const occupied = new Set(
+          bookingsForDate
+            .filter(b => {
+              const isTurn = b.turn === blockZoneForm.turn;
+              const isStatus = b.status !== 'cancelled' && b.status !== 'waiting_list';
+              const hasTable = !!b.assigned_table_id;
+              return isTurn && isStatus && hasTable;
+            })
+            .map(b => Number(b.assigned_table_id))
+        );
+        console.log('[Admin Block] Occupied Table IDs:', Array.from(occupied));
+        setOccupiedTablesBlock(occupied);
+      } catch (err) {
+        console.error("Error fetching occupied tables for block:", err);
+      }
+    };
+
+    fetchOccupiedTablesBlock();
+  }, [blockZoneForm.date, blockZoneForm.turn, showBlockModal, date, bookings]);
+
   const showToast = (message: string, type: 'success' | 'error') => {
     setNotification({ message, type });
     setTimeout(() => setNotification(null), 3000);
@@ -1171,11 +1203,15 @@ const AdminDashboard: React.FC<Props> = ({ onLogout }) => {
                       >
                         {tables
                           .filter(t => t.zone_id === blockZoneForm.zoneId)
+                          .filter(t => !occupiedTablesBlock.has(t.id)) // Filter occupied tables
                           .map(t => (
                             <option key={t.id} value={t.id}>Mesa {(t as any).table_number || t.id} ({t.min_pax}-{t.max_pax} pax)</option>
                           ))
                         }
                       </select>
+                      {tables.filter(t => t.zone_id === blockZoneForm.zoneId).filter(t => !occupiedTablesBlock.has(t.id)).length === 0 && (
+                        <p className="text-xs text-red-500 mt-1">⚠️ No hay mesas libres en esta zona/turno.</p>
+                      )}
                     </div>
                   )}
 

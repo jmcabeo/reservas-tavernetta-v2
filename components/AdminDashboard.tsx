@@ -235,6 +235,26 @@ const AdminDashboard: React.FC<Props> = ({ onLogout }) => {
   const handleManualSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    // Validar que no sea una hora pasada para hoy
+    const now = new Date();
+    const todayStr = now.toISOString().split('T')[0];
+
+    if (manualForm.date === todayStr) {
+      // Convertir hora seleccionada a minutos para comparar
+      const [selectedHour, selectedMinute] = manualForm.time ? manualForm.time.split(':').map(Number) : [0, 0];
+      const currentHour = now.getHours();
+      const currentMinute = now.getMinutes();
+
+      const selectedTimeInMinutes = selectedHour * 60 + selectedMinute;
+      const currentTimeInMinutes = currentHour * 60 + currentMinute;
+
+      // Permitir un margen de error? No, el usuario pidió estricto ("no deberia dejarme")
+      if (selectedTimeInMinutes < currentTimeInMinutes) {
+        showToast('No puedes crear una reserva en una hora que ya ha pasado.', 'error');
+        return;
+      }
+    }
+
     // Extract zone name from zones array
     const selectedZone = zones.find(z => z.id === Number(manualForm.zone_id));
     const zoneName = selectedZone ? (selectedZone.name_es || selectedZone.name) : '';

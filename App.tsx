@@ -79,10 +79,13 @@ function App() {
     <>
       {/* Header */}
       <header className="bg-tav-black text-white py-8 px-4 shadow-lg border-b-4 border-tav-gold">
-        <div className="max-w-4xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
-          <div className="text-center md:text-left">
-            <h1 className="text-4xl font-serif font-bold text-tav-gold tracking-wider uppercase">{t.title}</h1>
-            <div className="h-0.5 w-12 bg-tav-gold mt-2 mb-1 mx-auto md:mx-0"></div>
+        <div className="max-w-4xl mx-auto flex flex-col items-center gap-6">
+          <div className="text-center w-full">
+            <div className="inline-block relative">
+              <img src="/logo.png" alt={t.title} className="relative z-10 h-24 md:h-32 object-contain mb-4 bg-white rounded-3xl shadow-[0_0_20px_20px_rgba(255,255,255,1)]" />
+            </div>
+
+            <div className="h-0.5 w-12 bg-tav-gold mt-2 mb-1 mx-auto"></div>
             <p className="text-xs text-gray-400 font-light tracking-[0.2em] uppercase">{t.subtitle}</p>
           </div>
           <div className="flex gap-3">

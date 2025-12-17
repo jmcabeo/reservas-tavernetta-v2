@@ -1,10 +1,11 @@
 
-export type BookingStatus = 'pending' | 'confirmed' | 'completed' | 'cancelled' | 'waiting_list' | 'blocked' | 'pending_payment';
+export type BookingStatus = 'pending' | 'confirmed' | 'completed' | 'cancelled' | 'waiting_list' | 'blocked' | 'pending_payment' | 'pending_approval';
 
 export type Turn = 'lunch' | 'dinner';
 
 export interface Zone {
   id: number;
+  restaurant_id: string; // UUID
   name: string;
   name_es?: string;
   name_en?: string;
@@ -14,6 +15,7 @@ export interface Zone {
 
 export interface Table {
   id: number;
+  restaurant_id: string; // UUID
   zone_id: number;
   table_number: string;
   min_pax: number;
@@ -22,6 +24,7 @@ export interface Table {
 
 export interface Booking {
   id: string; // UUID
+  restaurant_id: string; // UUID
   created_at: string;
   date: string; // YYYY-MM-DD
   turn: Turn;
@@ -56,6 +59,7 @@ export interface AvailabilityResponse {
 export interface BlockedDay {
   date: string;
   reason?: string;
+  restaurant_id: string;
 }
 
 export interface BookingFormData {
@@ -74,6 +78,7 @@ export interface BookingFormData {
   consumes_capacity?: boolean;
   is_manual?: boolean;
   assigned_table_id?: number;
+  restaurant_id?: string;
 }
 
 export interface Translation {

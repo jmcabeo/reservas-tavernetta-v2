@@ -1,10 +1,11 @@
 
 import React, { useState, useEffect } from 'react';
-import { LogOut, Calendar as CalendarIcon, Users, CheckCircle, XCircle, Loader2, Utensils, Plus, Eye, Phone, Mail, DollarSign } from 'lucide-react';
+import { LogOut, Calendar as CalendarIcon, Users, CheckCircle, XCircle, Loader2, Utensils, Plus, Eye, Phone, Mail, DollarSign, Settings } from 'lucide-react';
 import { Booking, BookingStatus, Turn, Zone, Table, BookingFormData } from '../types';
-import { getBookingsByDate, checkInBooking, markNoShow, createBooking, updateBooking, blockDay, unblockDay, getBlockedDays, createBlockingBooking, deleteBooking, getSettings, updateSetting } from '../services/api';
+import { getBookingsByDate, checkInBooking, markNoShow, createBooking, updateBooking, blockDay, unblockDay, getBlockedDays, createBlockingBooking, deleteBooking, getSettings, updateSetting, getApiRestaurantId } from '../services/api';
 import { supabase } from '../services/supabaseClient';
 import { generateTimeSlots, LUNCH_START, LUNCH_END, DINNER_START, DINNER_END } from '../constants';
+import AdminSettings from './AdminSettings';
 
 interface Props {
   onLogout: () => void;
@@ -17,7 +18,7 @@ const AdminDashboard: React.FC<Props> = ({ onLogout }) => {
   const [turnFilter, setTurnFilter] = useState<Turn | 'all'>('all');
   const [statusFilter, setStatusFilter] = useState<BookingStatus | 'all' | 'waitlist' | 'cancelled' | 'blocked'>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
-  const [viewMode, setViewMode] = useState<'table' | 'calendar'>('table');
+  const [viewMode, setViewMode] = useState<'table' | 'calendar' | 'settings'>('table');
   const [notification, setNotification] = useState<{ message: string, type: 'success' | 'error' } | null>(null);
 
   // Booking Detail Modal State
@@ -264,6 +265,49 @@ const AdminDashboard: React.FC<Props> = ({ onLogout }) => {
     }
   };
 
+  const handleQuickApprove = async (booking: Booking) => {
+    // Determine next status based on whether deposit is required
+    // Logic: If deposit is enabled, it goes to 'pending_payment' so user receives link.
+    // If no deposit, it goes straight to 'confirmed'.
+    const nextStatus = depositEnabled ? 'pending_payment' : 'confirmed';
+
+    const res = await updateBooking(booking.id, { status: nextStatus });
+    if (res.success) {
+      showToast(`Reserva aprobada. Pasa a: ${nextStatus === 'pending_payment' ? 'PENDIENTE PAGO' : 'CONFIRMADA'}`, 'success');
+
+      // Trigger Webhook for n8n to send email/link
+      try {
+        const webhookUrl = 'https://n8n.captialeads.com/webhook/nueva-reserva';
+        const updatedBooking = { ...booking, status: nextStatus };
+
+        // We need to fetch current restaurant_id or assume context.
+        // Assuming booking object has what we need or we can construct minimal payload.
+        // Ideally we should have the full payload structure PublicBooking sends.
+        // Let's send the updated booking object which n8n should handle.
+
+        await fetch(webhookUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-webhook-secret': import.meta.env.VITE_WEBHOOK_SECRET || 'omnia_secret_key'
+          },
+          body: JSON.stringify({
+            event: 'booking_updated',
+            booking: updatedBooking,
+            restaurant_id: booking.restaurant_id // Ensure this exists in Booking type
+          })
+        });
+        console.log('Webhook triggered for Quick Approve');
+      } catch (err) {
+        console.error('Webhook trigger failed', err);
+      }
+
+      fetchBookings();
+    } else {
+      showToast('Error al aprobar reserva', 'error');
+    }
+  };
+
   const handleManualSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -301,6 +345,33 @@ const AdminDashboard: React.FC<Props> = ({ onLogout }) => {
     const res = await createBooking(manualBookingData, false);
     if (res.success) {
       showToast('Reserva manual creada correctamente', 'success');
+
+      // Trigger Webhook
+      try {
+        const webhookUrl = 'https://n8n.captialeads.com/webhook/nueva-reserva';
+        // Construct booking object with ID if available (res.bookingId)
+        const bookingForWebhook = {
+          ...manualBookingData,
+          id: res.bookingId, // Include the new ID
+          status: manualBookingData.status || 'confirmed', // Use selected status
+          restaurant_id: getApiRestaurantId()
+        };
+
+        await fetch(webhookUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-webhook-secret': import.meta.env.VITE_WEBHOOK_SECRET || 'omnia_secret_key'
+          },
+          body: JSON.stringify({
+            event: 'booking_created', // Use created event for new bookings
+            booking: bookingForWebhook,
+            restaurant_id: getApiRestaurantId() // Redundant but consistent
+          })
+        });
+        console.log('Webhook booking_created trigger sent');
+      } catch (err) { console.error('Webhook trigger error', err); }
+
       setShowManualModal(false);
       fetchBookings();
     } else {
@@ -316,6 +387,26 @@ const AdminDashboard: React.FC<Props> = ({ onLogout }) => {
     const res = await updateBooking(selectedBooking.id, manualForm);
     if (res.success) {
       showToast('Reserva actualizada correctamente', 'success');
+
+      // Trigger Webhook
+      try {
+        const webhookUrl = 'https://n8n.captialeads.com/webhook/nueva-reserva';
+        const updatedBooking = { ...selectedBooking, ...manualForm };
+
+        await fetch(webhookUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-webhook-secret': import.meta.env.VITE_WEBHOOK_SECRET || 'omnia_secret_key'
+          },
+          body: JSON.stringify({
+            event: 'booking_updated',
+            booking: updatedBooking,
+            restaurant_id: selectedBooking.restaurant_id
+          })
+        });
+      } catch (err) { console.error('Webhook trigger error', err); }
+
       setIsEditing(false);
       setSelectedBooking(null);
       fetchBookings();
@@ -475,355 +566,386 @@ const AdminDashboard: React.FC<Props> = ({ onLogout }) => {
     <div className="min-h-screen bg-gray-100">
       {/* Toast Notification */}
       {notification && (
-        <div className={`fixed top - 5 right - 5 z - 50 px - 6 py - 3 rounded shadow - xl text - white font - bold text - sm animate -in slide -in -from - right ${notification.type === 'success' ? 'bg-green-600' : 'bg-red-600'} `}>
+        <div className={`fixed top-5 right-5 z-50 px-6 py-3 rounded shadow-xl text-white font-bold text-sm animate-in slide-in-from-right ${notification.type === 'success' ? 'bg-green-600' : 'bg-red-600'}`}>
           {notification.message}
         </div>
       )}
 
-      <nav className="bg-tav-black shadow-md border-b border-gray-800 px-6 py-4 flex justify-between items-center sticky top-0 z-10">
+      <nav className="bg-primary shadow-md border-b border-gray-800 px-6 py-4 flex justify-between items-center sticky top-0 z-10">
         <div className="flex items-center gap-3">
-          <Utensils className="text-tav-gold" />
-          <span className="font-serif font-bold text-xl text-white">La Tavernetta <span className="text-tav-gold font-sans text-xs uppercase tracking-widest ml-2">Admin</span></span>
+          <Utensils className="text-secondary" />
+          <span className="font-bold text-xl text-white">Admin Panel <span className="text-secondary font-sans text-xs uppercase tracking-widest ml-2">Manager</span></span>
         </div>
-        <button onClick={onLogout} className="text-gray-400 hover:text-white flex items-center gap-2 text-xs uppercase font-bold tracking-wider">
-          <LogOut className="w-4 h-4" /> Cerrar Sesión
-        </button>
+        <div className="flex items-center gap-6">
+          <button
+            onClick={() => setViewMode(viewMode === 'settings' ? 'table' : 'settings')}
+            className={`flex items-center gap-2 text-xs uppercase font-bold tracking-wider transition-colors ${viewMode === 'settings' ? 'text-secondary' : 'text-gray-400 hover:text-white'}`}
+          >
+            <Settings className="w-4 h-4" /> Configuración
+          </button>
+          <button onClick={onLogout} className="text-gray-400 hover:text-white flex items-center gap-2 text-xs uppercase font-bold tracking-wider">
+            <LogOut className="w-4 h-4" /> Cerrar Sesión
+          </button>
+        </div>
       </nav>
 
       <main className="p-6 max-w-7xl mx-auto">
-        {/* Controls Header */}
-        <div className="bg-white p-6 rounded-sm shadow-sm mb-6 border-l-4 border-tav-gold">
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4 mb-4">
-            <div className="space-y-2">
-              <label className="text-xs font-bold uppercase text-gray-500">Fecha</label>
-              <div className="relative">
-                <CalendarIcon className="absolute left-3 top-3 w-4 h-4 text-tav-gold" />
-                <input
-                  type="date"
-                  value={date}
-                  onChange={(e) => setDate(e.target.value)}
-                  className="pl-10 pr-4 py-2 border rounded-none focus:ring-1 focus:ring-tav-gold outline-none font-serif bg-gray-50"
-                />
-              </div>
-            </div>
+        {/* Settings View */}
+        {viewMode === 'settings' ? (
+          <AdminSettings onSettingsChange={fetchSettings} />
+        ) : (
+          <>
+            {/* Controls Header */}
+            <div className="bg-white p-6 rounded-lg shadow-sm mb-6 border-l-4 border-secondary">
+              <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4 mb-4">
+                <div className="space-y-2">
+                  <label className="text-xs font-bold uppercase text-gray-500">Fecha</label>
+                  <div className="relative">
+                    <CalendarIcon className="absolute left-3 top-3 w-4 h-4 text-secondary" />
+                    <input
+                      type="date"
+                      value={date}
+                      onChange={(e) => setDate(e.target.value)}
+                      className="pl-10 pr-4 py-2 border rounded focus:ring-1 focus:ring-secondary outline-none bg-gray-50"
+                    />
+                  </div>
+                </div>
 
-            <div className="flex-1 max-w-md">
-              <label className="text-xs font-bold uppercase text-gray-500 block mb-2">Buscar</label>
-              <div className="relative">
-                <input
-                  type="text"
-                  placeholder="Nombre, email, teléfono o ID..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-4 pr-10 py-2 border rounded-none focus:ring-1 focus:ring-tav-gold outline-none bg-gray-50"
-                />
-                {searchQuery && (
+                <div className="flex-1 max-w-md">
+                  <label className="text-xs font-bold uppercase text-gray-500 block mb-2">Buscar</label>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      placeholder="Nombre, email, teléfono o ID..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="w-full pl-4 pr-10 py-2 border rounded focus:ring-1 focus:ring-secondary outline-none bg-gray-50"
+                    />
+                    {searchQuery && (
+                      <button
+                        type="button"
+                        onClick={() => setSearchQuery('')}
+                        className="absolute right-3 top-2.5 text-gray-400 hover:text-gray-600"
+                      >
+                        <XCircle className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex gap-4">
+                  <div className="px-4 py-2 bg-gray-50 border border-gray-200 rounded">
+                    <span className="text-xs font-bold uppercase block text-gray-500">Pax Comida</span>
+                    <span className="text-2xl font-bold text-gray-900">{stats.lunch}</span>
+                  </div>
+                  <div className="px-4 py-2 bg-gray-50 border border-gray-200 rounded">
+                    <span className="text-xs font-bold uppercase block text-gray-500">Pax Cena</span>
+                    <span className="text-2xl font-bold text-gray-900">{stats.dinner}</span>
+                  </div>
+
+                  {/* Deposit Toggle Moved Here */}
+                  <div className="flex flex-col justify-center items-center px-4 py-2 bg-gray-50 border border-gray-200 rounded-sm">
+                    <span className="text-xs font-bold uppercase block text-gray-500 mb-1">Fianza</span>
+                    <button
+                      onClick={async () => {
+                        const newValue = !depositEnabled;
+                        setDepositEnabled(newValue);
+                        await updateSetting('enable_deposit', String(newValue));
+                        showToast(`Fianza ${newValue ? 'activada' : 'desactivada'}`, 'success');
+                      }}
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${depositEnabled ? 'bg-secondary' : 'bg-gray-300'}`}
+                    >
+                      <span
+                        className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${depositEnabled ? 'translate-x-6' : 'translate-x-1'}`}
+                      />
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex flex-col md:flex-row gap-4 items-start md:items-center justify-between">
+                <div className="flex flex-wrap gap-4 w-full md:w-auto">
+                  {/* Turn Filter Select */}
+                  <div className="w-full md:w-auto">
+                    <label className="text-xs font-bold uppercase text-gray-500 block mb-1 md:hidden">Turno</label>
+                    <select
+                      value={turnFilter}
+                      onChange={(e) => setTurnFilter(e.target.value as any)}
+                      className="w-full md:w-auto px-3 py-2 text-xs font-bold uppercase tracking-wider border border-gray-300 bg-white focus:border-secondary outline-none rounded"
+                    >
+                      <option value="all">Todos los Turnos</option>
+                      <option value="lunch">Comida</option>
+                      <option value="dinner">Cena</option>
+                    </select>
+                  </div>
+
+                  {/* Status Filter Select */}
+                  <div className="w-full md:w-auto">
+                    <label className="text-xs font-bold uppercase text-gray-500 block mb-1 md:hidden">Estado</label>
+                    <select
+                      value={statusFilter}
+                      onChange={(e) => setStatusFilter(e.target.value as any)}
+                      className="w-full md:w-auto px-3 py-2 text-xs font-bold uppercase tracking-wider border border-gray-300 bg-white focus:border-secondary outline-none rounded"
+                    >
+                      <option value="all">Todos los Estados</option>
+                      <option value="waitlist">Lista de Espera</option>
+                      <option value="confirmed">Confirmadas</option>
+                      <option value="pending_payment">Pendiente Pago</option>
+                      <option value="pending_approval">Pendiente Aprobación</option>
+                      <option value="cancelled">Canceladas</option>
+                      <option value="blocked">Bloqueos</option>
+                    </select>
+                  </div>
+                </div>
+
+
+
+                <div className="flex gap-2 ml-auto items-center mt-4 md:mt-0">
+
                   <button
                     type="button"
-                    onClick={() => setSearchQuery('')}
-                    className="absolute right-3 top-2.5 text-gray-400 hover:text-gray-600"
+                    onClick={() => { fetchBlockedDays(); setShowBlockModal(true); }}
+                    className="bg-white border border-gray-300 text-gray-600 px-4 py-2 text-xs font-bold uppercase tracking-widest hover:bg-gray-50 flex items-center gap-2 transition-colors"
                   >
-                    <XCircle className="w-4 h-4" />
+                    <XCircle className="w-4 h-4" /> Bloqueos
                   </button>
-                )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setManualForm({
+                        date: new Date().toISOString().split('T')[0],
+                        turn: 'lunch',
+                        time: '13:00',
+                        pax: 2,
+                        zone_id: 1,
+                        name: '',
+                        email: '',
+                        phone: '',
+                        deposit_amount: 0,
+                        status: 'confirmed',
+                        consumes_capacity: true
+                      });
+                      setShowManualModal(true);
+                    }}
+                    className="bg-primary text-white px-6 py-2 text-xs font-bold uppercase tracking-widest hover:opacity-90 flex items-center gap-2 transition-opacity rounded"
+                  >
+                    <Plus className="w-4 h-4" /> Nueva Reserva
+                  </button>
+                </div>
               </div>
             </div>
 
-            <div className="flex gap-4">
-              <div className="px-4 py-2 bg-gray-50 border border-gray-200 rounded-sm">
-                <span className="text-xs font-bold uppercase block text-gray-500">Pax Comida</span>
-                <span className="text-2xl font-serif font-bold text-tav-black">{stats.lunch}</span>
-              </div>
-              <div className="px-4 py-2 bg-gray-50 border border-gray-200 rounded-sm">
-                <span className="text-xs font-bold uppercase block text-gray-500">Pax Cena</span>
-                <span className="text-2xl font-serif font-bold text-tav-black">{stats.dinner}</span>
-              </div>
+            {/* Calendar View */}
+            {
+              viewMode === 'calendar' && (
+                <div className="bg-white shadow-lg p-6 border-t border-gray-100">
+                  {(() => {
+                    const currentDate = new Date(date);
+                    const year = currentDate.getFullYear();
+                    const month = currentDate.getMonth();
+                    const calendarDays = generateCalendarDays(year, month);
+                    const monthName = new Date(year, month).toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
 
-              {/* Deposit Toggle Moved Here */}
-              <div className="flex flex-col justify-center items-center px-4 py-2 bg-gray-50 border border-gray-200 rounded-sm">
-                <span className="text-xs font-bold uppercase block text-gray-500 mb-1">Fianza</span>
-                <button
-                  onClick={async () => {
-                    const newValue = !depositEnabled;
-                    setDepositEnabled(newValue);
-                    await updateSetting('enable_deposit', String(newValue));
-                    showToast(`Fianza ${newValue ? 'activada' : 'desactivada'}`, 'success');
-                  }}
-                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${depositEnabled ? 'bg-tav-gold' : 'bg-gray-300'}`}
-                >
-                  <span
-                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${depositEnabled ? 'translate-x-6' : 'translate-x-1'}`}
-                  />
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <div className="flex flex-col md:flex-row gap-4 items-start md:items-center justify-between">
-            <div className="flex flex-wrap gap-4 w-full md:w-auto">
-              {/* Turn Filter Select */}
-              <div className="w-full md:w-auto">
-                <label className="text-xs font-bold uppercase text-gray-500 block mb-1 md:hidden">Turno</label>
-                <select
-                  value={turnFilter}
-                  onChange={(e) => setTurnFilter(e.target.value as any)}
-                  className="w-full md:w-auto px-3 py-2 text-xs font-bold uppercase tracking-wider border border-gray-300 bg-white focus:border-tav-gold outline-none"
-                >
-                  <option value="all">Todos los Turnos</option>
-                  <option value="lunch">Comida</option>
-                  <option value="dinner">Cena</option>
-                </select>
-              </div>
-
-              {/* Status Filter Select */}
-              <div className="w-full md:w-auto">
-                <label className="text-xs font-bold uppercase text-gray-500 block mb-1 md:hidden">Estado</label>
-                <select
-                  value={statusFilter}
-                  onChange={(e) => setStatusFilter(e.target.value as any)}
-                  className="w-full md:w-auto px-3 py-2 text-xs font-bold uppercase tracking-wider border border-gray-300 bg-white focus:border-tav-gold outline-none"
-                >
-                  <option value="all">Todos los Estados</option>
-                  <option value="waitlist">Lista de Espera</option>
-                  <option value="confirmed">Confirmadas</option>
-                  <option value="cancelled">Canceladas</option>
-                  <option value="blocked">Bloqueos</option>
-                </select>
-              </div>
-            </div>
-
-
-
-            <div className="flex gap-2 ml-auto items-center mt-4 md:mt-0">
-
-              <button
-                type="button"
-                onClick={() => { fetchBlockedDays(); setShowBlockModal(true); }}
-                className="bg-white border border-gray-300 text-gray-600 px-4 py-2 text-xs font-bold uppercase tracking-widest hover:bg-gray-50 flex items-center gap-2 transition-colors"
-              >
-                <XCircle className="w-4 h-4" /> Bloqueos
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setManualForm({
-                    date: new Date().toISOString().split('T')[0],
-                    turn: 'lunch',
-                    time: '13:00',
-                    pax: 2,
-                    zone_id: 1,
-                    name: '',
-                    email: '',
-                    phone: '',
-                    deposit_amount: 0,
-                    status: 'confirmed',
-                    consumes_capacity: true
-                  });
-                  setShowManualModal(true);
-                }}
-                className="bg-tav-black text-tav-gold px-6 py-2 text-xs font-bold uppercase tracking-widest hover:bg-gray-900 flex items-center gap-2 transition-colors"
-              >
-                <Plus className="w-4 h-4" /> Nueva Reserva
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Calendar View */}
-        {
-          viewMode === 'calendar' && (
-            <div className="bg-white shadow-lg p-6 border-t border-gray-100">
-              {(() => {
-                const currentDate = new Date(date);
-                const year = currentDate.getFullYear();
-                const month = currentDate.getMonth();
-                const calendarDays = generateCalendarDays(year, month);
-                const monthName = new Date(year, month).toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
-
-                return (
-                  <>
-                    <div className="flex justify-between items-center mb-6">
-                      <h3 className="text-2xl font-serif font-bold text-tav-black capitalize">{monthName}</h3>
-                      <div className="flex gap-2">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const prev = new Date(year, month - 1, 1);
-                            setDate(prev.toISOString().split('T')[0]);
-                          }}
-                          className="px-4 py-2 border border-gray-300 hover:bg-gray-50 text-gray-600 font-bold text-xs uppercase"
-                        >
-                          ← Anterior
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setDate(new Date().toISOString().split('T')[0])}
-                          className="px-4 py-2 border border-tav-gold bg-tav-gold text-tav-black font-bold text-xs uppercase hover:bg-amber-600"
-                        >
-                          Hoy
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const next = new Date(year, month + 1, 1);
-                            setDate(next.toISOString().split('T')[0]);
-                          }}
-                          className="px-4 py-2 border border-gray-300 hover:bg-gray-50 text-gray-600 font-bold text-xs uppercase"
-                        >
-                          Siguiente →
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-7 gap-2">
-                      {['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'].map(day => (
-                        <div key={day} className="text-center font-bold text-xs uppercase text-gray-500 py-2">
-                          {day}
+                    return (
+                      <>
+                        <div className="flex justify-between items-center mb-6">
+                          <h3 className="text-2xl font-bold text-gray-900 capitalize">{monthName}</h3>
+                          <div className="flex gap-2">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const prev = new Date(year, month - 1, 1);
+                                setDate(prev.toISOString().split('T')[0]);
+                              }}
+                              className="px-4 py-2 border border-gray-300 hover:bg-gray-50 text-gray-600 font-bold text-xs uppercase"
+                            >
+                              ← Anterior
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setDate(new Date().toISOString().split('T')[0])}
+                              className="px-4 py-2 border border-secondary bg-secondary text-white font-bold text-xs uppercase hover:opacity-90 rounded"
+                            >
+                              Hoy
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const next = new Date(year, month + 1, 1);
+                                setDate(next.toISOString().split('T')[0]);
+                              }}
+                              className="px-4 py-2 border border-gray-300 hover:bg-gray-50 text-gray-600 font-bold text-xs uppercase"
+                            >
+                              Siguiente →
+                            </button>
+                          </div>
                         </div>
-                      ))}
 
-                      {calendarDays.map((dayInfo, index) => {
-                        if (!dayInfo.isCurrentMonth) {
-                          return <div key={index} className="aspect-square" />;
-                        }
+                        <div className="grid grid-cols-7 gap-2">
+                          {['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'].map(day => (
+                            <div key={day} className="text-center font-bold text-xs uppercase text-gray-500 py-2">
+                              {day}
+                            </div>
+                          ))}
 
-                        const isToday = dayInfo.date === new Date().toISOString().split('T')[0];
-                        const isSelected = dayInfo.date === date;
+                          {calendarDays.map((dayInfo, index) => {
+                            if (!dayInfo.isCurrentMonth) {
+                              return <div key={index} className="aspect-square" />;
+                            }
 
-                        return (
-                          <button
-                            key={index}
-                            type="button"
-                            onClick={() => {
-                              setDate(dayInfo.date);
-                              setViewMode('table');
-                            }}
-                            className={`aspect-square border rounded-sm p-2 flex flex-col items-center justify-center transition-all hover:shadow-md
-                            ${isSelected ? 'border-tav-gold bg-tav-gold text-tav-black ring-2 ring-tav-gold' : 'border-gray-200 hover:border-tav-gold'}
+                            const isToday = dayInfo.date === new Date().toISOString().split('T')[0];
+                            const isSelected = dayInfo.date === date;
+
+                            return (
+                              <button
+                                key={index}
+                                type="button"
+                                onClick={() => {
+                                  setDate(dayInfo.date);
+                                  setViewMode('table');
+                                }}
+                                className={`aspect-square border rounded p-2 flex flex-col items-center justify-center transition-all hover:shadow-md
+                            ${isSelected ? 'border-secondary bg-secondary text-white ring-2 ring-secondary' : 'border-gray-200 hover:border-secondary'}
                             ${isToday && !isSelected ? 'bg-blue-50 border-blue-300' : ''}
                           `}
-                          >
-                            <span className={`text-lg font-bold ${isSelected ? 'text-tav-black' : 'text-gray-700'}`}>
-                              {dayInfo.day}
-                            </span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </>
-                );
-              })()}
-            </div>
-          )
-        }
+                              >
+                                <span className={`text-lg font-bold ${isSelected ? 'text-white' : 'text-gray-700'}`}>
+                                  {dayInfo.day}
+                                </span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </>
+                    );
+                  })()}
+                </div>
+              )
+            }
 
-        {/* Table */}
-        {
-          viewMode === 'table' && (
-            <div className="bg-white shadow-lg overflow-hidden border-t border-gray-100">
-              <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse">
-                  <thead className="bg-gray-50 text-gray-500 text-xs uppercase font-bold tracking-wider">
-                    <tr>
-                      {statusFilter === 'waitlist' && <th className="p-4 font-medium">#</th>}
-                      <th className="p-4 font-medium">Hora</th>
-                      <th className="p-4 font-medium">Cliente</th>
-                      <th className="p-4 font-medium">Pax</th>
-                      <th className="p-4 font-medium">Zona</th>
-                      <th className="p-4 font-medium">Estado</th>
-                      <th className="p-4 font-medium text-right">Acciones</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100 text-sm">
-                    {loading ? (
-                      <tr><td colSpan={statusFilter === 'waitlist' ? 7 : 6} className="p-8 text-center"><Loader2 className="animate-spin mx-auto text-tav-gold" /></td></tr>
-                    ) : filteredBookings.length === 0 ? (
-                      <tr><td colSpan={statusFilter === 'waitlist' ? 7 : 6} className="p-8 text-center text-gray-500 italic">No hay reservas para este día/turno.</td></tr>
-                    ) : (
-                      filteredBookings.map((b, index) => {
-                        // Safely handle ID as string
-                        const bookingId = String(b.id);
-                        // Safely handle Zone Name
-                        const zoneName = b.zones?.name_es || `Zona ${b.zone_id}`;
+            {/* Table */}
+            {
+              viewMode === 'table' && (
+                <div className="bg-white shadow-lg overflow-hidden border-t border-gray-100">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse">
+                      <thead className="bg-gray-50 text-gray-500 text-xs uppercase font-bold tracking-wider">
+                        <tr>
+                          {statusFilter === 'waitlist' && <th className="p-4 font-medium">#</th>}
+                          <th className="p-4 font-medium">Hora</th>
+                          <th className="p-4 font-medium">Cliente</th>
+                          <th className="p-4 font-medium">Pax</th>
+                          <th className="p-4 font-medium">Zona</th>
+                          <th className="p-4 font-medium text-right">Acciones</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100 text-sm">
+                        {loading ? (
+                          <tr><td colSpan={statusFilter === 'waitlist' ? 7 : 6} className="p-8 text-center"><Loader2 className="animate-spin mx-auto text-secondary" /></td></tr>
+                        ) : filteredBookings.length === 0 ? (
+                          <tr><td colSpan={statusFilter === 'waitlist' ? 7 : 6} className="p-8 text-center text-gray-500 italic">No hay reservas para este día/turno.</td></tr>
+                        ) : (
+                          filteredBookings.map((b, index) => {
+                            // Safely handle ID as string
+                            const bookingId = String(b.id);
+                            // Safely handle Zone Name
+                            const zoneName = b.zones?.name_es || `Zona ${b.zone_id}`;
 
-                        return (
-                          <tr key={bookingId} className="hover:bg-gray-50 transition-colors">
-                            {statusFilter === 'waitlist' && (
-                              <td className="p-4">
-                                <div className="w-8 h-8 bg-amber-500 text-white font-bold rounded-full flex items-center justify-center">
-                                  {index + 1}
-                                </div>
-                              </td>
-                            )}
-                            <td className="p-4">
-                              <div className="flex items-center gap-2">
-                                {b.turn === 'lunch' ? <span className="w-2 h-2 rounded-full bg-tav-gold" title="Comida"></span> : <span className="w-2 h-2 rounded-full bg-tav-black" title="Cena"></span>}
-                                <span className="font-serif font-bold text-tav-black text-lg">{b.time}</span>
-                              </div>
-                            </td>
-                            <td className="p-4">
-                              <div className="font-bold text-tav-black">{b.customer_name}</div>
-                              <div className="text-xs text-gray-400 tracking-wide hidden sm:block">#{bookingId.slice(0, 8)}</div>
-                            </td>
-                            <td className="p-4">
-                              <div className="flex items-center gap-1 text-gray-600">
-                                <Users className="w-4 h-4 text-tav-gold" /> {b.pax}
-                              </div>
-                            </td>
-                            <td className="p-4 text-gray-600 font-serif italic">
-                              {zoneName}
-                            </td>
-                            <td className="p-4">
-                              <span className={`px - 2 py - 1 text - [10px] font - bold uppercase tracking - widest border
+                            return (
+                              <tr key={bookingId} className="hover:bg-gray-50 transition-colors">
+                                {statusFilter === 'waitlist' && (
+                                  <td className="p-4">
+                                    <div className="w-8 h-8 bg-amber-500 text-white font-bold rounded-full flex items-center justify-center">
+                                      {index + 1}
+                                    </div>
+                                  </td>
+                                )}
+                                <td className="p-4">
+                                  <div className="flex items-center gap-2">
+                                    {b.turn === 'lunch' ? <span className="w-2 h-2 rounded-full bg-secondary" title="Comida"></span> : <span className="w-2 h-2 rounded-full bg-primary" title="Cena"></span>}
+                                    <span className="font-bold text-gray-900 text-lg">{b.time}</span>
+                                  </div>
+                                </td>
+                                <td className="p-4">
+                                  <div className="font-bold text-gray-900">{b.customer_name}</div>
+                                  <div className="text-xs text-gray-400 tracking-wide hidden sm:block">#{bookingId.slice(0, 8)}</div>
+                                </td>
+                                <td className="p-4">
+                                  <div className="flex items-center gap-1 text-gray-600">
+                                    <Users className="w-4 h-4 text-secondary" /> {b.pax}
+                                  </div>
+                                </td>
+                                <td className="p-4 text-gray-600 italic">
+                                  {zoneName}
+                                </td>
+                                <td className="p-4">
+                                  <span className={`px - 2 py - 1 text - [10px] font - bold uppercase tracking - widest border
                            ${b.status === 'confirmed' ? 'bg-green-50 text-green-700 border-green-200' : ''}
                            ${b.status === 'completed' ? 'bg-gray-100 text-gray-500 border-gray-200' : ''}
+                           ${b.status === 'pending_payment' ? 'bg-orange-50 text-orange-700 border-orange-200' : ''}
+                           ${b.status === 'pending_approval' ? 'bg-blue-50 text-blue-700 border-blue-200' : ''}
                            ${b.status === 'cancelled' ? 'bg-red-50 text-red-700 border-red-100' : ''}
                            ${b.status === 'waiting_list' ? 'bg-yellow-50 text-yellow-700 border-yellow-100' : ''}
                            ${b.status === 'blocked' ? 'bg-gray-800 text-white border-gray-800' : ''}
 `}>
-                                {b.status === 'waiting_list' ? 'LISTA ESPERA' : b.status.toUpperCase()}
-                              </span>
-                            </td>
-                            <td className="p-4 text-right">
-                              <div className="flex justify-end gap-2">
-                                <button
-                                  onClick={() => setSelectedBooking(b)}
-                                  title="Ver Detalles"
-                                  className="p-2 bg-white border border-gray-200 text-gray-600 hover:bg-gray-100 transition-colors rounded-sm"
-                                >
-                                  <Eye className="w-4 h-4" />
-                                </button>
+                                    {b.status === 'waiting_list' ? 'LISTA ESPERA' :
+                                      b.status === 'pending_payment' ? 'PENDIENTE PAGO' :
+                                        b.status === 'pending_approval' ? 'PENDIENTE APROBAR' :
+                                          b.status.toUpperCase()}
+                                  </span>
+                                </td>
+                                <td className="p-4 text-right">
+                                  <div className="flex justify-end gap-2">
+                                    <button
+                                      onClick={() => setSelectedBooking(b)}
+                                      title="Ver Detalles"
+                                      className="p-2 bg-white border border-gray-200 text-gray-600 hover:bg-gray-100 transition-colors rounded-sm"
+                                    >
+                                      <Eye className="w-4 h-4" />
+                                    </button>
 
-                                {b.status === 'confirmed' && (
-                                  <>
-                                    <button
-                                      onClick={() => handleCheckIn(bookingId)}
-                                      title="Check In"
-                                      className="p-2 bg-white border border-green-200 text-green-600 hover:bg-green-50 transition-colors rounded-sm"
-                                    >
-                                      <CheckCircle className="w-4 h-4" />
-                                    </button>
-                                    <button
-                                      onClick={() => handleNoShow(bookingId)}
-                                      title="No Show"
-                                      className="p-2 bg-white border border-red-200 text-red-600 hover:bg-red-50 transition-colors rounded-sm"
-                                    >
-                                      <XCircle className="w-4 h-4" />
-                                    </button>
-                                  </>
-                                )}
-                              </div>
-                            </td>
-                          </tr>
-                        )
-                      })
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )
-        }
+                                    {b.status === 'pending_approval' && (
+                                      <button
+                                        onClick={() => handleQuickApprove(b)}
+                                        title="Aprobar Rápido"
+                                        className="p-2 bg-white border border-blue-200 text-blue-600 hover:bg-blue-50 transition-colors rounded-sm"
+                                      >
+                                        <CheckCircle className="w-4 h-4" />
+                                      </button>
+                                    )}
+
+                                    {b.status === 'confirmed' && (
+                                      <>
+                                        <button
+                                          onClick={() => handleCheckIn(bookingId)}
+                                          title="Check In"
+                                          className="p-2 bg-white border border-green-200 text-green-600 hover:bg-green-50 transition-colors rounded-sm"
+                                        >
+                                          <CheckCircle className="w-4 h-4" />
+                                        </button>
+                                        <button
+                                          onClick={() => handleNoShow(bookingId)}
+                                          title="No Show"
+                                          className="p-2 bg-white border border-red-200 text-red-600 hover:bg-red-50 transition-colors rounded-sm"
+                                        >
+                                          <XCircle className="w-4 h-4" />
+                                        </button>
+                                      </>
+                                    )}
+                                  </div>
+                                </td>
+                              </tr>
+                            )
+                          })
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )
+            }
+          </>
+        )}
       </main >
 
       {/* DETAILS MODAL */}
@@ -959,6 +1081,7 @@ const AdminDashboard: React.FC<Props> = ({ onLogout }) => {
                       <option value="confirmed">CONFIRMADA</option>
                       <option value="waiting_list">LISTA DE ESPERA</option>
                       <option value="pending_payment">PENDIENTE DE PAGO</option>
+                      <option value="pending_approval">PENDIENTE DE APROBACIÓN</option>
                       <option value="cancelled">CANCELADA</option>
                       <option value="completed">COMPLETADA</option>
                     </select>

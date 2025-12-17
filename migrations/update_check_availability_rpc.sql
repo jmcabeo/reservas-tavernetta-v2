@@ -1,7 +1,8 @@
--- Update check_availability RPC to respect consumes_capacity flag
--- This ensures that manual bookings with consumes_capacity = false do NOT reduce availability
+-- Drop previous version to avoid signature ambiguity (optional but recommended)
+DROP FUNCTION IF EXISTS check_availability(DATE, TEXT, INT);
 
-CREATE OR REPLACE FUNCTION check_availability(check_date DATE, check_turn TEXT, check_pax INT)
+-- Updated RPC to accepts restaurant_id
+CREATE OR REPLACE FUNCTION check_availability(check_date DATE, check_turn TEXT, check_pax INT, check_restaurant_id UUID)
 RETURNS TABLE (
   zone_id INT,
   zone_name_es TEXT,
@@ -13,28 +14,33 @@ DECLARE
   total_capacity INT;
   used_capacity INT;
 BEGIN
-  -- Iterate over all zones
-  FOR var_zone IN SELECT id, name_es, name_en FROM zones LOOP
+  -- Iterate all zones BELONGING to this restaurant
+  FOR var_zone IN 
+    SELECT id, name_es, name_en 
+    FROM zones 
+    WHERE restaurant_id = check_restaurant_id
+  LOOP
     
-    -- 1. Calculate Total Capacity for this zone (count of suitable tables)
+    -- 1. Calculate Total Capacity (tables in this zone & restaurant)
     SELECT COUNT(*) INTO total_capacity
     FROM tables t
     WHERE t.zone_id = var_zone.id
+      AND t.restaurant_id = check_restaurant_id -- Redundant if zone is checked, but safe
       AND t.min_pax <= check_pax
       AND t.max_pax >= check_pax;
 
-    -- 2. Calculate Used Capacity (count of occupied suitable tables)
-    -- CRITICAL UPDATE: Added check for consumes_capacity
+    -- 2. Calculate Used Capacity
     SELECT COUNT(DISTINCT b.assigned_table_id) INTO used_capacity
     FROM bookings b
     JOIN tables t ON b.assigned_table_id = t.id
     WHERE b.booking_date = check_date
       AND b.turn = check_turn
+      AND b.restaurant_id = check_restaurant_id -- Filter by restaurant
       AND b.status NOT IN ('cancelled', 'waiting_list')
       AND t.zone_id = var_zone.id
       AND t.min_pax <= check_pax
       AND t.max_pax >= check_pax
-      AND (b.consumes_capacity IS NULL OR b.consumes_capacity = true); -- Only count if consumes_capacity is true
+      AND (b.consumes_capacity IS NULL OR b.consumes_capacity = true);
 
     -- 3. Return result if there is availability
     IF (total_capacity - used_capacity) > 0 THEN

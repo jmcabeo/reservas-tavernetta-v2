@@ -11,7 +11,7 @@ const getEnvVar = (key: string, viteKey: string): string => {
       const val = import.meta.env[viteKey] || import.meta.env[key];
       if (val) return val;
     }
-    
+
     // Check for Process (Webpack/CRA/Node)
     // @ts-ignore
     if (typeof process !== 'undefined' && process.env) {
@@ -26,9 +26,19 @@ const getEnvVar = (key: string, viteKey: string): string => {
 };
 
 // Environment variables
-export const SUPABASE_URL = getEnvVar('REACT_APP_SUPABASE_URL', 'VITE_SUPABASE_URL') || 'https://ttaoejgrwqlkleknsdkt.supabase.co';
-export const SUPABASE_ANON_KEY = getEnvVar('REACT_APP_SUPABASE_ANON_KEY', 'VITE_SUPABASE_ANON_KEY') || 'sb_publishable_D6wodVCQSH62x-SNI_HYZQ_rUVtlefy';
+export const SUPABASE_URL = getEnvVar('REACT_APP_SUPABASE_URL', 'VITE_SUPABASE_URL') || ''; // Hardcoded fallback removed for safety
+export const SUPABASE_ANON_KEY = getEnvVar('REACT_APP_SUPABASE_ANON_KEY', 'VITE_SUPABASE_ANON_KEY') || ''; // Hardcoded fallback removed for safety
 export const STRIPE_PUBLIC_KEY = getEnvVar('REACT_APP_STRIPE_PUBLIC_KEY', 'VITE_STRIPE_PUBLIC_KEY');
+
+// Project Isolation / Multi-tenancy
+// If not provided in env, we could default to hardcoded "Tavernetta" ID for backward compatibility during dev,
+// BUT for strict safety, we should ideally require it.
+// For now, I'll put a placeholder. USER MUST SET THIS IN .ENV
+export const RESTAURANT_ID = getEnvVar('REACT_APP_RESTAURANT_ID', 'VITE_RESTAURANT_ID');
+// SuperAdmin Email for Route Protection
+export const SUPERADMIN_EMAIL = getEnvVar('REACT_APP_SUPERADMIN_EMAIL', 'VITE_SUPERADMIN_EMAIL') || 'admin@portal.com';
+// Site URL for Redirects (Password Reset)
+export const SITE_URL = getEnvVar('REACT_APP_SITE_URL', 'VITE_SITE_URL') || (typeof window !== 'undefined' ? window.location.origin : '');
 
 export const DEPOSIT_PER_PAX = 5;
 
@@ -42,14 +52,14 @@ export const generateTimeSlots = (start: string, end: string) => {
   const slots = [];
   let [startHour, startMinute] = start.split(':').map(Number);
   const [endHour, endMinute] = end.split(':').map(Number);
-  
+
   let currentHour = startHour;
   let currentMinute = startMinute;
 
   while (currentHour < endHour || (currentHour === endHour && currentMinute <= endMinute)) {
     const timeString = `${currentHour.toString().padStart(2, '0')}:${currentMinute.toString().padStart(2, '0')}`;
     slots.push(timeString);
-    
+
     currentMinute += 15;
     if (currentMinute >= 60) {
       currentMinute = 0;
@@ -61,8 +71,8 @@ export const generateTimeSlots = (start: string, end: string) => {
 
 export const TRANSLATIONS: Record<'es' | 'en', Translation> = {
   es: {
-    title: "La Tavernetta",
-    subtitle: "Auténtica Cocina Italiana",
+    title: "Portal de Reservas",
+    subtitle: "Gestión de Reservas",
     step1: "Selecciona Fecha y Hora",
     step2: "Elige tu Zona",
     step3: "Tus Datos",
@@ -90,8 +100,8 @@ export const TRANSLATIONS: Record<'es' | 'en', Translation> = {
     adminLogin: "Acceso Administrativo",
   },
   en: {
-    title: "La Tavernetta",
-    subtitle: "Authentic Italian Cuisine",
+    title: "Reservation Portal",
+    subtitle: "Bookings Management",
     step1: "Select Date & Time",
     step2: "Choose Your Zone",
     step3: "Your Details",

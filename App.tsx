@@ -1,156 +1,192 @@
 import React, { useState, useEffect } from 'react';
-import { Routes, Route, Link, useNavigate, Navigate } from 'react-router-dom';
-import { supabase } from './services/supabaseClient';
+import { BrowserRouter as Router, Routes, Route, Link, Navigate, useLocation } from 'react-router-dom';
 import PublicBooking from './components/PublicBooking';
 import AdminDashboard from './components/AdminDashboard';
-import Auth from './components/Auth';
-import CancelBooking from './components/CancelBooking';
-import Maintenance from './components/Maintenance';
+import Login from './components/Auth';
+import AdminSettings from './components/AdminSettings';
+import SuperAdminDashboard from './components/SuperAdminDashboard';
+import { Key } from 'lucide-react';
 import { TRANSLATIONS } from './constants';
+import { SUPERADMIN_EMAIL } from './constants';
+import { resolveTenant, Tenant } from './services/TenantResolver';
+import { getApiRestaurantId, setApiRestaurantId, getSettings } from './services/api';
+import { supabase } from './services/supabaseClient';
 
-function App() {
-  const [session, setSession] = useState<any>(null);
-  const [lang, setLang] = useState<'es' | 'en'>('es');
-  const [loading, setLoading] = useState(true);
+// Create a Protected Route component
+const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
+  const isAuthenticated = sessionStorage.getItem('isAuthenticated') === 'true';
+  const location = useLocation();
 
-  const navigate = useNavigate();
-
-  // Maintenance Mode Logic
-  const [isMaintenance, setIsMaintenance] = useState(() => {
-    // Check if we are in a browser environment
-    if (typeof window === 'undefined') return true;
-
-    const params = new URLSearchParams(window.location.search);
-    const bypassParam = params.get('bypass');
-    const storedBypass = localStorage.getItem('tav_maintenance_bypass');
-    const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-
-    if (bypassParam === 'tavernetta2024') {
-      localStorage.setItem('tav_maintenance_bypass', 'true');
-      return false;
-    }
-
-    return !(storedBypass === 'true' || isLocal);
-  });
-
-  useEffect(() => {
-    // Clean URL if bypass was used
-    const params = new URLSearchParams(window.location.search);
-    if (params.get('bypass') === 'tavernetta2024') {
-      window.history.replaceState({}, '', window.location.pathname);
-    }
-  }, []);
-
-  useEffect(() => {
-    // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setLoading(false);
-    });
-
-    // Listen for auth changes
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-    });
-
-    return () => subscription.unsubscribe();
-  }, []);
-
-  const t = TRANSLATIONS[lang];
-
-
-
-  if (isMaintenance) {
-    return <Maintenance />;
+  if (!isAuthenticated) {
+    return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  if (loading) {
+  return <>{children}</>;
+};
+
+// SuperAdmin Protected Route
+const SuperAdminRoute = ({ children }: { children: React.ReactNode }) => {
+  const [authorized, setAuthorized] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => {
+      if (data.user?.email === SUPERADMIN_EMAIL) {
+        setAuthorized(true);
+      } else {
+        setAuthorized(false);
+      }
+    });
+  }, []);
+
+  if (authorized === null) return <div className="p-10 text-center">Verificando acceso...</div>;
+  if (authorized === false) return <Navigate to="/login" replace />;
+
+  return <>{children}</>;
+};
+
+const App: React.FC = () => {
+  const [lang, setLang] = useState<'es' | 'en'>('es');
+  const [appReady, setAppReady] = useState(false);
+  const [tenant, setTenant] = useState<Tenant | null>(null);
+  const [resolveError, setResolveError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const initApp = async () => {
+      try {
+        const currentTenant = await resolveTenant();
+
+        if (currentTenant) {
+          console.log('Tenant Resolved:', currentTenant.name);
+          setTenant(currentTenant);
+          // Initialize API service with the resolved ID
+          setApiRestaurantId(currentTenant.id);
+
+          // Fetch and Apply Theme Settings
+          getSettings().then(settings => {
+            if (settings.theme_primary_color) {
+              document.documentElement.style.setProperty('--color-primary', settings.theme_primary_color);
+            }
+            if (settings.theme_secondary_color) {
+              document.documentElement.style.setProperty('--color-secondary', settings.theme_secondary_color);
+            }
+            if (settings.theme_font) {
+              // Future: Set font family
+            }
+          });
+
+          setAppReady(true);
+
+          // Optional: Update document title
+          document.title = `${currentTenant.name} - Reservas`;
+        } else {
+          setResolveError('Restaurante no encontrado o configuración inválida.');
+        }
+      } catch (e) {
+        console.error('Failed to resolve tenant', e);
+        setResolveError('Error crítico iniciando la aplicación.');
+      }
+    };
+
+    initApp();
+  }, []);
+
+  if (resolveError) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-white">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-tav-gold"></div>
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 flex-col p-4 text-center">
+        <h1 className="text-3xl font-bold text-gray-800 mb-2">Error de Configuración</h1>
+        <p className="text-red-600">{resolveError}</p>
+        <p className="text-sm text-gray-500 mt-4">Contacte con el administrador del sistema.</p>
       </div>
     );
   }
 
-  // Component for the Public Homepage (Header + Booking + Footer)
-  const Home = () => (
-    <>
-      {/* Header */}
-      <header className="bg-tav-black text-white py-8 px-4 shadow-lg border-b-4 border-tav-gold">
-        <div className="max-w-4xl mx-auto flex flex-col items-center gap-6">
-          <div className="text-center w-full">
-            <div className="inline-block relative">
-              <img src="/logo.png" alt={t.title} className="relative z-10 h-24 md:h-32 object-contain mb-4 bg-white rounded-3xl shadow-[0_0_20px_20px_rgba(255,255,255,1)]" />
-            </div>
-
-            <div className="h-0.5 w-12 bg-tav-gold mt-2 mb-1 mx-auto"></div>
-            <p className="text-xs text-gray-400 font-light tracking-[0.2em] uppercase">{t.subtitle}</p>
-          </div>
-          <div className="flex gap-3">
-            <button
-              onClick={() => setLang('es')}
-              className={`px-3 py-1 text-xs font-bold tracking-widest border transition-colors ${lang === 'es' ? 'bg-tav-gold border-tav-gold text-tav-black' : 'text-gray-400 border-gray-700 hover:border-tav-gold hover:text-tav-gold'}`}
-            >
-              ES
-            </button>
-            <button
-              onClick={() => setLang('en')}
-              className={`px-3 py-1 text-xs font-bold tracking-widest border transition-colors ${lang === 'en' ? 'bg-tav-gold border-tav-gold text-tav-black' : 'text-gray-400 border-gray-700 hover:border-tav-gold hover:text-tav-gold'}`}
-            >
-              EN
-            </button>
-          </div>
+  if (!appReady) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-white">
+        <div className="animate-pulse flex flex-col items-center">
+          <div className="h-12 w-12 border-4 border-t-amber-500 border-gray-200 rounded-full animate-spin mb-4"></div>
+          <p className="text-gray-400 text-sm tracking-widest uppercase">Cargando Restaurante...</p>
         </div>
-      </header>
-
-      {/* Main Content */}
-      <main className="p-4 md:p-8">
-        <PublicBooking lang={lang} />
-      </main>
-
-      {/* Footer */}
-      <footer className="bg-tav-black text-gray-500 py-12 text-center text-sm border-t border-gray-800">
-        <p className="font-serif italic mb-4 text-gray-400">"Cucina italiana autentica"</p>
-        <p>&copy; {new Date().getFullYear()} La Tavernetta.</p>
-        {/* CRITICAL FIX: Using Link instead of <a> to prevent page reload */}
-        <Link to="/admin" className="mt-6 inline-block text-xs text-gray-700 hover:text-tav-gold transition-colors uppercase tracking-widest">
-          {t.adminLogin}
-        </Link>
-      </footer>
-    </>
-  );
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-white font-sans text-tav-black">
+    <div className="min-h-screen bg-gray-50 font-sans text-gray-900">
       <Routes>
-        {/* Public Route */}
-        <Route path="/" element={<Home />} />
-        <Route path="/cancelar" element={<CancelBooking />} />
+        {/* Public Booking Route */}
+        <Route path="/" element={
+          <>
+            {/* Header inside Route to allow separate layouts if needed */}
+            <header className="bg-primary text-white py-6 px-4 shadow-lg border-b border-white/10">
+              <div className="max-w-4xl mx-auto flex justify-between items-center">
+                <div>
+                  <h1 className="text-2xl md:text-3xl font-bold tracking-wider text-secondary">
+                    {tenant?.name || TRANSLATIONS[lang].title}
+                  </h1>
+                  <p className="text-xs md:text-sm text-gray-400 tracking-widest uppercase mt-1">
+                    {TRANSLATIONS[lang].subtitle}
+                  </p>
+                </div>
+                <div className="flex items-center gap-4">
+                  <button
+                    onClick={() => setLang(lang === 'es' ? 'en' : 'es')}
+                    className="text-xs font-bold uppercase tracking-widest hover:text-secondary transition-colors border border-gray-600 px-3 py-1 rounded"
+                  >
+                    {lang === 'es' ? 'EN' : 'ES'}
+                  </button>
+                  {/* Admin Link (Hidden/Subtle) */}
+                  <Link to="/login" className="text-gray-600 hover:text-white transition-colors">
+                    <Key className="w-4 h-4" />
+                  </Link>
+                </div>
+              </div>
+            </header>
 
-        {/* Login Route - Redirects to admin if already logged in */}
-        <Route
-          path="/login"
-          element={!session ? <Auth onLogin={() => navigate('/admin')} /> : <Navigate to="/admin" />}
-        />
+            <main className="container mx-auto px-4 py-8">
+              <PublicBooking lang={lang} />
+            </main>
 
-        {/* Admin Protected Route */}
-        <Route
-          path="/admin"
-          element={
-            session ? (
-              <AdminDashboard
-                onLogout={async () => {
-                  await supabase.auth.signOut();
-                  navigate('/');
-                }}
-              />
-            ) : (
-              <Navigate to="/login" />
-            )
+            <footer className="bg-gray-900 text-gray-500 py-8 text-center text-xs mt-12">
+              <p>&copy; {new Date().getFullYear()} {tenant?.name || 'La Tavernetta'}. All rights reserved.</p>
+            </footer>
+          </>
+        } />
+
+        {/* Login Route */}
+        <Route path="/login" element={<Login tenant={tenant} onLogin={(user) => {
+          sessionStorage.setItem('isAuthenticated', 'true');
+          const params = window.location.search;
+
+          // Check if SuperAdmin
+          if (user?.email === SUPERADMIN_EMAIL) {
+            window.location.href = `/superadmin`;
+            return;
           }
-        />
+
+          window.location.href = `/admin${params}`;
+        }} />} />
+
+        {/* Protected Admin Routes */}
+        <Route path="/admin" element={
+          <ProtectedRoute>
+            <AdminDashboard onLogout={() => window.location.reload()} />
+          </ProtectedRoute>
+        } />
+
+        <Route path="/admin/settings" element={
+          <ProtectedRoute>
+            <AdminSettings />
+          </ProtectedRoute>
+        } />
+
+        {/* Super Admin Route */}
+        <Route path="/superadmin" element={
+          <SuperAdminRoute>
+            <SuperAdminDashboard />
+          </SuperAdminRoute>
+        } />
+
       </Routes>
     </div>
   );

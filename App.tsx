@@ -49,6 +49,7 @@ const App: React.FC = () => {
   const [appReady, setAppReady] = useState(false);
   const [tenant, setTenant] = useState<Tenant | null>(null);
   const [resolveError, setResolveError] = useState<string | null>(null);
+  const [logoUrl, setLogoUrl] = useState<string>('');
 
   useEffect(() => {
     const initApp = async () => {
@@ -69,8 +70,8 @@ const App: React.FC = () => {
             if (settings.theme_secondary_color) {
               document.documentElement.style.setProperty('--color-secondary', settings.theme_secondary_color);
             }
-            if (settings.theme_font) {
-              // Future: Set font family
+            if (settings.logo_url) {
+              setLogoUrl(settings.logo_url);
             }
           });
 
@@ -120,13 +121,19 @@ const App: React.FC = () => {
             {/* Header inside Route to allow separate layouts if needed */}
             <header className="bg-primary text-white py-6 px-4 shadow-lg border-b border-white/10">
               <div className="max-w-4xl mx-auto flex justify-between items-center">
-                <div>
-                  <h1 className="text-2xl md:text-3xl font-bold tracking-wider text-secondary">
-                    {tenant?.name || TRANSLATIONS[lang].title}
-                  </h1>
-                  <p className="text-xs md:text-sm text-gray-400 tracking-widest uppercase mt-1">
-                    {TRANSLATIONS[lang].subtitle}
-                  </p>
+                <div className="flex items-center gap-4">
+                  {logoUrl ? (
+                    <img src={logoUrl} alt={tenant?.name} className="h-16 w-auto object-contain" />
+                  ) : (
+                    <div>
+                      <h1 className="text-2xl md:text-3xl font-bold tracking-wider text-secondary">
+                        {tenant?.name || TRANSLATIONS[lang].title}
+                      </h1>
+                      <p className="text-xs md:text-sm text-gray-400 tracking-widest uppercase mt-1">
+                        {TRANSLATIONS[lang].subtitle}
+                      </p>
+                    </div>
+                  )}
                 </div>
                 <div className="flex items-center gap-4">
                   <button

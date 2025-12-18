@@ -53,6 +53,7 @@ const AdminDashboard: React.FC<Props> = ({ onLogout }) => {
   // Settings State
   const [depositEnabled, setDepositEnabled] = useState<boolean>(true);
   const [closedWeekdays, setClosedWeekdays] = useState<number[]>([]);
+  const [logoUrl, setLogoUrl] = useState<string>('');
 
   // Zone Blocking State
   const [zones, setZones] = useState<Zone[]>([]);
@@ -217,6 +218,9 @@ const AdminDashboard: React.FC<Props> = ({ onLogout }) => {
     setDepositEnabled(settings['enable_deposit'] !== 'false');
     if (settings['closed_weekdays']) {
       setClosedWeekdays(settings['closed_weekdays'].split(',').map(Number));
+    }
+    if (settings['logo_url']) {
+      setLogoUrl(settings['logo_url']);
     }
   };
 
@@ -573,7 +577,11 @@ const AdminDashboard: React.FC<Props> = ({ onLogout }) => {
 
       <nav className="bg-primary shadow-md border-b border-gray-800 px-6 py-4 flex justify-between items-center sticky top-0 z-10">
         <div className="flex items-center gap-3">
-          <Utensils className="text-secondary" />
+          {logoUrl ? (
+            <img src={logoUrl} alt="Logo" className="h-10 w-auto object-contain bg-white/10 rounded px-2" />
+          ) : (
+            <Utensils className="text-secondary" />
+          )}
           <span className="font-bold text-xl text-white">Admin Panel <span className="text-secondary font-sans text-xs uppercase tracking-widest ml-2">Manager</span></span>
         </div>
         <div className="flex items-center gap-6">

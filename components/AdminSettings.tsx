@@ -17,6 +17,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({ onSettingsChange }) => {
     const [requireManualApproval, setRequireManualApproval] = useState(false);
     const [flexibleCapacity, setFlexibleCapacity] = useState(false);
     const [logoUrl, setLogoUrl] = useState('');
+    const [faviconUrl, setFaviconUrl] = useState('');
     const [themePrimaryColor, setThemePrimaryColor] = useState('#111827'); // Default Gray-900
     const [themeSecondaryColor, setThemeSecondaryColor] = useState('#d97706'); // Default Amber-600
     const [manualValidationMessage, setManualValidationMessage] = useState('');
@@ -30,6 +31,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({ onSettingsChange }) => {
 
     // Upload State
     const [uploading, setUploading] = useState(false);
+    const [uploadingFavicon, setUploadingFavicon] = useState(false);
 
     useEffect(() => {
         loadSettings();
@@ -43,6 +45,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({ onSettingsChange }) => {
             setRequireManualApproval(settings['require_manual_approval'] === 'true');
             setFlexibleCapacity(settings['flexible_capacity'] === 'true');
             setLogoUrl(settings['logo_url'] || '');
+            setFaviconUrl(settings['favicon_url'] || '');
             setThemePrimaryColor(settings['theme_primary_color'] || '#111827');
             setThemeSecondaryColor(settings['theme_secondary_color'] || '#d97706');
             setManualValidationMessage(settings['manual_validation_message'] || 'Tu reserva está pendiente de confirmación por el restaurante.');
@@ -71,6 +74,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({ onSettingsChange }) => {
                 updateSetting('require_manual_approval', String(requireManualApproval)),
                 updateSetting('flexible_capacity', String(flexibleCapacity)),
                 updateSetting('logo_url', logoUrl),
+                updateSetting('favicon_url', faviconUrl),
                 updateSetting('theme_primary_color', themePrimaryColor),
                 updateSetting('theme_secondary_color', themeSecondaryColor),
                 updateSetting('manual_validation_message', manualValidationMessage),
@@ -177,6 +181,36 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({ onSettingsChange }) => {
             showToast('Error subiendo imagen: ' + error.message, 'error');
         } finally {
             setUploading(false);
+        }
+    };
+
+    const handleFaviconUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+        if (!event.target.files || event.target.files.length === 0) return;
+
+        const file = event.target.files[0];
+        const fileExt = file.name.split('.').pop();
+        // Validate extension if needed (ico, png, svg)
+        const R_ID = getApiRestaurantId();
+        const fileName = `${R_ID}/favicon_${Date.now()}.${fileExt}`;
+        const filePath = `${fileName}`;
+
+        setUploadingFavicon(true);
+        try {
+            const { error: uploadError } = await supabase.storage
+                .from('logos') // Reusing logos bucket
+                .upload(filePath, file, { upsert: true });
+
+            if (uploadError) throw uploadError;
+
+            const { data } = supabase.storage.from('logos').getPublicUrl(filePath);
+            if (data) {
+                setFaviconUrl(data.publicUrl);
+                showToast('Favicon subido. Recuerda guardar.', 'success');
+            }
+        } catch (error: any) {
+            showToast('Error subiendo favicon: ' + error.message, 'error');
+        } finally {
+            setUploadingFavicon(false);
         }
     };
 
@@ -478,6 +512,55 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({ onSettingsChange }) => {
                         </div>
                     </div>
 
+                    {/* Favicon URL */}
+                    <div>
+                        <label className="block text-xs font-bold uppercase text-gray-500 mb-2 flex items-center gap-2">
+                            <ImageIcon className="w-4 h-4" /> Favicon (Icono Pestaña)
+                        </label>
+
+                        <div className="border border-gray-200 bg-gray-50 h-40 flex flex-col items-center justify-center rounded-sm relative overflow-hidden group">
+                            {faviconUrl ? (
+                                <>
+                                    <img src={faviconUrl} alt="Preview Favicon" className="h-16 w-16 object-contain p-2" onError={(e) => (e.currentTarget.src = '')} />
+                                    <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                        <button
+                                            onClick={() => setFaviconUrl('')}
+                                            className="text-white hover:text-red-400 font-bold uppercase text-xs flex items-center gap-1 bg-black/50 px-3 py-1 rounded-full"
+                                        >
+                                            <X className="w-4 h-4" /> Quitar
+                                        </button>
+                                    </div>
+                                </>
+                            ) : (
+                                <div className="text-center p-4">
+                                    <div className="w-8 h-8 bg-gray-200 rounded-full mx-auto mb-2 flex items-center justify-center text-gray-400 font-bold text-xs">ico</div>
+                                    <span className="text-gray-400 text-xs text-center block mb-2">Sube tu Favicon</span>
+                                </div>
+                            )}
+
+                            {uploadingFavicon && (
+                                <div className="absolute inset-0 bg-white/80 flex items-center justify-center z-10">
+                                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-tav-gold"></div>
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="mt-3">
+                            <label className="cursor-pointer flex items-center justify-center gap-2 bg-white border border-gray-300 text-gray-700 px-4 py-2 text-xs font-bold uppercase tracking-widest hover:bg-gray-50 transition-colors w-full">
+                                <Upload className="w-4 h-4" />
+                                {uploadingFavicon ? 'Subiendo...' : 'Seleccionar Favicon'}
+                                <input
+                                    type="file"
+                                    accept="image/*"
+                                    className="hidden"
+                                    onChange={handleFaviconUpload}
+                                    disabled={uploadingFavicon}
+                                />
+                            </label>
+                            <p className="text-[10px] text-gray-400 mt-1 text-center">PNG, ICO o JPG cuadrado.</p>
+                        </div>
+                    </div>
+
                     {/* Color Picker */}
                     <div>
                         <h4 className="font-bold text-gray-900 mb-4">Colores Corporativos</h4>
@@ -538,8 +621,8 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({ onSettingsChange }) => {
                         <Save className="w-4 h-4" />
                     </button>
                 </div>
-            </section>
-        </div>
+            </section >
+        </div >
     );
 };
 

@@ -73,6 +73,13 @@ const App: React.FC = () => {
             if (settings.logo_url) {
               setLogoUrl(settings.logo_url);
             }
+            if (settings.favicon_url) {
+              const link = document.querySelector("link[rel*='icon']") as HTMLLinkElement || document.createElement('link');
+              link.type = 'image/png';
+              link.rel = 'icon';
+              link.href = settings.favicon_url;
+              document.getElementsByTagName('head')[0].appendChild(link);
+            }
           });
 
           setAppReady(true);

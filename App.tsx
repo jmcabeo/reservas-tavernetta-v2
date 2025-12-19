@@ -5,6 +5,8 @@ import AdminDashboard from './components/AdminDashboard';
 import Login from './components/Auth';
 import AdminSettings from './components/AdminSettings';
 import SuperAdminDashboard from './components/SuperAdminDashboard';
+import CancelBooking from './components/CancelBooking';
+import UpdatePassword from './components/UpdatePassword';
 import { Key } from 'lucide-react';
 import { TRANSLATIONS } from './constants';
 import { SUPERADMIN_EMAIL } from './constants';
@@ -200,6 +202,12 @@ const App: React.FC = () => {
             <SuperAdminDashboard />
           </SuperAdminRoute>
         } />
+
+        {/* Cancellation Route */}
+        <Route path="/cancelar" element={<CancelBooking />} />
+
+        {/* Password Recovery Route */}
+        <Route path="/admin/update-password" element={<UpdatePassword />} />
 
       </Routes>
     </div>

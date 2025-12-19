@@ -24,8 +24,11 @@ const Auth: React.FC<Props> = ({ onLogin, tenant }) => {
     setLoading(true);
     setError(null);
 
+    const resetUrl = `${window.location.origin}/admin/update-password`;
+    console.log('[Auth] Password reset redirect URL:', resetUrl);
+
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: SITE_URL + '/admin/update-password',
+      redirectTo: resetUrl,
     });
 
     if (error) {

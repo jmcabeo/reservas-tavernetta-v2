@@ -36,7 +36,8 @@ const AdminDashboard: React.FC<Props> = ({ onLogout }) => {
     email: '',
     phone: '',
     deposit_amount: 0,
-    status: 'confirmed'
+    status: 'confirmed',
+    consumes_capacity: localStorage.getItem('consumes_capacity_pref') !== 'false'
   });
 
   // Edit Booking State
@@ -356,8 +357,13 @@ const AdminDashboard: React.FC<Props> = ({ onLogout }) => {
         // Construct booking object with ID if available (res.bookingId)
         const bookingForWebhook = {
           ...manualBookingData,
-          id: res.bookingId, // Include the new ID
-          status: manualBookingData.status || 'confirmed', // Use selected status
+          id: res.bookingId,
+          uuid: res.bookingId,
+          booking_date: manualBookingData.date,
+          customer_name: manualBookingData.name,
+          customer_email: manualBookingData.email,
+          customer_phone: manualBookingData.phone,
+          status: manualBookingData.status || 'confirmed',
           restaurant_id: getApiRestaurantId()
         };
 
@@ -720,6 +726,7 @@ const AdminDashboard: React.FC<Props> = ({ onLogout }) => {
                   <button
                     type="button"
                     onClick={() => {
+                      const pref = localStorage.getItem('consumes_capacity_pref') !== 'false';
                       setManualForm({
                         date: new Date().toISOString().split('T')[0],
                         turn: 'lunch',
@@ -731,7 +738,7 @@ const AdminDashboard: React.FC<Props> = ({ onLogout }) => {
                         phone: '',
                         deposit_amount: 0,
                         status: 'confirmed',
-                        consumes_capacity: true
+                        consumes_capacity: pref
                       });
                       setShowManualModal(true);
                     }}
@@ -1127,7 +1134,11 @@ const AdminDashboard: React.FC<Props> = ({ onLogout }) => {
                     </div>
                     <button
                       type="button"
-                      onClick={() => setManualForm({ ...manualForm, consumes_capacity: !manualForm.consumes_capacity, assigned_table_id: undefined })}
+                      onClick={() => {
+                        const newVal = !(manualForm.consumes_capacity ?? true);
+                        setManualForm({ ...manualForm, consumes_capacity: newVal, assigned_table_id: undefined });
+                        localStorage.setItem('consumes_capacity_pref', String(newVal));
+                      }}
                       className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ml-4 ${(manualForm.consumes_capacity ?? true) ? 'bg-tav-gold' : 'bg-gray-300'}`}
                     >
                       <span

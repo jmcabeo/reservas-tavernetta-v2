@@ -454,7 +454,7 @@ export const cancelBookingByUUID = async (uuid: string): Promise<{ success: bool
   const R_ID = getApiRestaurantId();
   const { data: booking } = await supabase
     .from('bookings')
-    .select('booking_date, time, restaurant_id')
+    .select('booking_date, time, restaurant_id, status')
     .eq('uuid', uuid)
     .single();
 
@@ -462,6 +462,30 @@ export const cancelBookingByUUID = async (uuid: string): Promise<{ success: bool
 
   if (booking.restaurant_id !== R_ID) {
     return { success: false, error: 'Reserva no encontrada' };
+  }
+
+  // Check if already cancelled
+  if (booking.status === 'cancelled') {
+    return { success: true }; // Already cancelled
+  }
+
+  // Time-based cancellation check
+  try {
+    const settings = await getSettings();
+    const minNoticeMinutes = parseInt(settings['min_notice_minutes'] || '1440');
+
+    const bookingDateTime = new Date(`${booking.booking_date}T${booking.time}`);
+    const now = new Date();
+    const diffMs = bookingDateTime.getTime() - now.getTime();
+    const diffMinutes = diffMs / (1000 * 60);
+
+    if (diffMinutes < minNoticeMinutes) {
+      console.warn(`[API] Late cancellation attempt for booking ${uuid}. Diff: ${diffMinutes}m, Min: ${minNoticeMinutes}m`);
+      return { success: false, error: 'LATE_CANCELLATION' };
+    }
+  } catch (err) {
+    console.error('Error checking cancellation time limit:', err);
+    // Continue despite error as fallback, or block? Blocking is safer for the business.
   }
 
   const { error } = await supabase

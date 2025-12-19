@@ -180,16 +180,21 @@ const PublicBooking: React.FC<Props> = ({ lang }) => {
       // --- WEBHOOK CALL (Non-payment flows) ---
       try {
         const bookingData = {
-          id: result.bookingId, // Use 'id' to match Admin format
-          bookingId: result.bookingId, // Keep for legacy if needed
+          id: result.bookingId,
+          uuid: result.bookingId,
+          bookingId: result.bookingId,
           restaurant_id: getApiRestaurantId(),
           date: formData.date,
+          booking_date: formData.date,
           time: formData.time,
           turn: formData.turn,
           pax: formData.pax,
           name: formData.name,
+          customer_name: formData.name,
           email: formData.email,
+          customer_email: formData.email,
           phone: formData.phone,
+          customer_phone: formData.phone,
           zone_name: zoneName,
           status: statusToUse,
           comments: formData.comments,

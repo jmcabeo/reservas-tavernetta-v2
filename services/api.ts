@@ -305,6 +305,26 @@ export const getBookingsByDate = async (date: string): Promise<Booking[]> => {
 };
 
 /**
+ * Admin: Get upcoming bookings (from today onwards)
+ */
+export const getUpcomingBookings = async (limit: number = 50): Promise<Booking[]> => {
+  const R_ID = getApiRestaurantId();
+  const today = new Date().toISOString().split('T')[0];
+
+  const { data, error } = await supabase
+    .from('bookings')
+    .select('*, zones(name_es, name_en)')
+    .eq('restaurant_id', R_ID)
+    .gte('booking_date', today)
+    .order('booking_date', { ascending: true })
+    .order('time', { ascending: true })
+    .limit(limit);
+
+  if (error) { console.error('Error fetching upcoming bookings:', error); return []; }
+  return data as Booking[];
+};
+
+/**
  * Admin: Check-in
  */
 export const checkInBooking = async (bookingId: string): Promise<boolean> => {

@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { LogOut, Calendar as CalendarIcon, Users, CheckCircle, XCircle, Loader2, Utensils, Plus, Eye, Phone, Mail, DollarSign, Settings } from 'lucide-react';
 import { Booking, BookingStatus, Turn, Zone, Table, BookingFormData } from '../types';
-import { getBookingsByDate, checkInBooking, markNoShow, createBooking, updateBooking, blockDay, unblockDay, getBlockedDays, createBlockingBooking, deleteBooking, getSettings, updateSetting, getApiRestaurantId } from '../services/api';
+import { getBookingsByDate, checkInBooking, markNoShow, createBooking, updateBooking, blockDay, unblockDay, getBlockedDays, createBlockingBooking, deleteBooking, getSettings, updateSetting, getApiRestaurantId, getUpcomingBookings } from '../services/api';
 import { supabase } from '../services/supabaseClient';
 import { generateTimeSlots, LUNCH_START, LUNCH_END, DINNER_START, DINNER_END } from '../constants';
 import AdminSettings from './AdminSettings';
@@ -18,7 +18,7 @@ const AdminDashboard: React.FC<Props> = ({ onLogout }) => {
   const [turnFilter, setTurnFilter] = useState<Turn | 'all'>('all');
   const [statusFilter, setStatusFilter] = useState<BookingStatus | 'all' | 'waitlist' | 'cancelled' | 'blocked'>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
-  const [viewMode, setViewMode] = useState<'table' | 'calendar' | 'settings'>('table');
+  const [viewMode, setViewMode] = useState<'table' | 'calendar' | 'settings' | 'upcoming'>('table');
   const [notification, setNotification] = useState<{ message: string, type: 'success' | 'error' } | null>(null);
 
   // Booking Detail Modal State
@@ -182,8 +182,13 @@ const AdminDashboard: React.FC<Props> = ({ onLogout }) => {
   const fetchBookings = async () => {
     setLoading(true);
     try {
-      const data = await getBookingsByDate(date);
-      setBookings(data);
+      if (viewMode === 'upcoming') {
+        const data = await getUpcomingBookings(50);
+        setBookings(data);
+      } else {
+        const data = await getBookingsByDate(date);
+        setBookings(data);
+      }
     } catch (e) {
       console.error("Error loading bookings:", e);
       showToast("Error cargando reservas", "error");
@@ -244,7 +249,7 @@ const AdminDashboard: React.FC<Props> = ({ onLogout }) => {
       supabase.removeChannel(subscription);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [date]);
+  }, [date, viewMode]);
 
   const handleCheckIn = async (id: string) => {
     console.log("Click on Check-in for ID:", id);
@@ -608,7 +613,7 @@ const AdminDashboard: React.FC<Props> = ({ onLogout }) => {
         {viewMode === 'settings' ? (
           <AdminSettings onSettingsChange={fetchSettings} />
         ) : (
-          <>
+          <div>
             {/* Controls Header */}
             <div className="bg-white p-6 rounded-lg shadow-sm mb-6 border-l-4 border-secondary">
               <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4 mb-4">
@@ -619,8 +624,11 @@ const AdminDashboard: React.FC<Props> = ({ onLogout }) => {
                     <input
                       type="date"
                       value={date}
-                      onChange={(e) => setDate(e.target.value)}
-                      className="pl-10 pr-4 py-2 border rounded focus:ring-1 focus:ring-secondary outline-none bg-gray-50"
+                      onChange={(e) => {
+                        setDate(e.target.value);
+                        if (viewMode === 'upcoming') setViewMode('table');
+                      }}
+                      className={`pl-10 pr-4 py-2 border rounded focus:ring-1 focus:ring-secondary outline-none bg-gray-50 ${viewMode === 'upcoming' ? 'opacity-50' : ''}`}
                     />
                   </div>
                 </div>
@@ -747,6 +755,23 @@ const AdminDashboard: React.FC<Props> = ({ onLogout }) => {
                     <Plus className="w-4 h-4" /> Nueva Reserva
                   </button>
                 </div>
+
+                <div className="flex gap-2 ml-auto items-center mt-4 md:mt-0">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (viewMode === 'upcoming') {
+                        setViewMode('table');
+                      } else {
+                        setViewMode('upcoming');
+                      }
+                    }}
+                    className={`px-4 py-2 text-xs font-bold uppercase tracking-widest flex items-center gap-2 transition-colors border ${viewMode === 'upcoming' ? 'bg-secondary text-white border-secondary' : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'}`}
+                  >
+                    <CalendarIcon className="w-4 h-4" />
+                    {viewMode === 'upcoming' ? 'Ver por Día' : 'Ver Próximas'}
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -840,13 +865,14 @@ const AdminDashboard: React.FC<Props> = ({ onLogout }) => {
 
             {/* Table */}
             {
-              viewMode === 'table' && (
+              (viewMode === 'table' || viewMode === 'upcoming') && (
                 <div className="bg-white shadow-lg overflow-hidden border-t border-gray-100">
                   <div className="overflow-x-auto">
                     <table className="w-full text-left border-collapse">
                       <thead className="bg-gray-50 text-gray-500 text-xs uppercase font-bold tracking-wider">
                         <tr>
                           {statusFilter === 'waitlist' && <th className="p-4 font-medium">#</th>}
+                          {viewMode === 'upcoming' && <th className="p-4 font-medium">Fecha</th>}
                           <th className="p-4 font-medium">Hora</th>
                           <th className="p-4 font-medium">Cliente</th>
                           <th className="p-4 font-medium">Pax</th>
@@ -858,7 +884,7 @@ const AdminDashboard: React.FC<Props> = ({ onLogout }) => {
                         {loading ? (
                           <tr><td colSpan={statusFilter === 'waitlist' ? 7 : 6} className="p-8 text-center"><Loader2 className="animate-spin mx-auto text-secondary" /></td></tr>
                         ) : filteredBookings.length === 0 ? (
-                          <tr><td colSpan={statusFilter === 'waitlist' ? 7 : 6} className="p-8 text-center text-gray-500 italic">No hay reservas para este día/turno.</td></tr>
+                          <tr><td colSpan={statusFilter === 'waitlist' || viewMode === 'upcoming' ? 7 : 6} className="p-8 text-center text-gray-500 italic">No hay reservas para este {viewMode === 'upcoming' ? 'periodo' : 'día/turno'}.</td></tr>
                         ) : (
                           filteredBookings.map((b, index) => {
                             // Safely handle ID as string
@@ -872,6 +898,13 @@ const AdminDashboard: React.FC<Props> = ({ onLogout }) => {
                                   <td className="p-4">
                                     <div className="w-8 h-8 bg-amber-500 text-white font-bold rounded-full flex items-center justify-center">
                                       {index + 1}
+                                    </div>
+                                  </td>
+                                )}
+                                {viewMode === 'upcoming' && (
+                                  <td className="p-4">
+                                    <div className="text-xs font-bold text-gray-500 uppercase">
+                                      {new Date(b.booking_date).toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short' })}
                                     </div>
                                   </td>
                                 )}
@@ -894,7 +927,7 @@ const AdminDashboard: React.FC<Props> = ({ onLogout }) => {
                                   {zoneName}
                                 </td>
                                 <td className="p-4">
-                                  <span className={`px - 2 py - 1 text - [10px] font - bold uppercase tracking - widest border
+                                  <span className={`px-2 py-1 text-[10px] font-bold uppercase tracking-widest border
                            ${b.status === 'confirmed' ? 'bg-green-50 text-green-700 border-green-200' : ''}
                            ${b.status === 'completed' ? 'bg-gray-100 text-gray-500 border-gray-200' : ''}
                            ${b.status === 'pending_payment' ? 'bg-orange-50 text-orange-700 border-orange-200' : ''}
@@ -959,9 +992,9 @@ const AdminDashboard: React.FC<Props> = ({ onLogout }) => {
                 </div>
               )
             }
-          </>
+          </div>
         )}
-      </main >
+      </main>
 
       {/* DETAILS MODAL */}
       {

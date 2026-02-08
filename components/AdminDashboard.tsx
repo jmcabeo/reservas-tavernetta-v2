@@ -81,6 +81,7 @@ const AdminDashboard: React.FC<Props> = ({ onLogout }) => {
   useEffect(() => {
     const fetchOccupiedTables = async () => {
       if (!showManualModal && !isEditing) return;
+      if (!manualForm.date) return;
 
       // Always fetch fresh bookings for the specific date to ensure accuracy
       // This prevents issues where the local 'bookings' state might be stale (e.g. realtime lag)

@@ -183,13 +183,20 @@ const AdminDashboard: React.FC<Props> = ({ onLogout }) => {
   const fetchBookings = async () => {
     setLoading(true);
     try {
+      let data;
       if (viewMode === 'upcoming') {
-        const data = await getUpcomingBookings(50);
-        setBookings(data);
+        data = await getUpcomingBookings(50);
       } else {
-        const data = await getBookingsByDate(date);
-        setBookings(data);
+        data = await getBookingsByDate(date);
       }
+
+      // Normalize data: ensure date is always set from booking_date for legacy UI
+      const normalizedData = (data || []).map(b => ({
+        ...b,
+        date: b.date || (b as any).booking_date
+      }));
+
+      setBookings(normalizedData);
     } catch (e) {
       console.error("Error loading bookings:", e);
       showToast("Error cargando reservas", "error");
@@ -433,14 +440,23 @@ const AdminDashboard: React.FC<Props> = ({ onLogout }) => {
   };
 
   const openEditModal = (booking: Booking) => {
-    // Determine date - use booking_date from DB if date is missing
-    let bookingDate = booking.date || (booking as any).booking_date || '';
-    if (bookingDate.includes('T')) {
-      bookingDate = bookingDate.split('T')[0];
+    console.log("[DEBUG] Opening Edit Modal for booking:", booking);
+
+    // Determine date - map booking_date to date if needed
+    let bDate = booking.date || (booking as any).booking_date || '';
+    if (bDate && bDate.includes('T')) {
+      bDate = bDate.split('T')[0];
     }
 
+    // Determine capacity consumption
+    // PRIORITY: If flexibleCapacity is ON, we force it to OFF (false).
+    const shouldConsume = flexibleCapacity ? false : (booking.consumes_capacity ?? true);
+
+    console.log("[DEBUG] Date for form:", bDate);
+    console.log("[DEBUG] Consumes Capacity for form:", shouldConsume);
+
     setManualForm({
-      date: bookingDate,
+      date: bDate,
       turn: booking.turn,
       time: booking.time,
       pax: booking.pax,
@@ -451,8 +467,7 @@ const AdminDashboard: React.FC<Props> = ({ onLogout }) => {
       comments: booking.comments,
       deposit_amount: booking.deposit_amount,
       status: booking.status,
-      // If flexibleCapacity is active, default to false (OFF). Otherwise use booking value or true.
-      consumes_capacity: flexibleCapacity ? false : (booking.consumes_capacity ?? true)
+      consumes_capacity: shouldConsume
     });
     setSelectedBooking(booking);
     setIsEditing(true);

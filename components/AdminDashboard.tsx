@@ -440,33 +440,37 @@ const AdminDashboard: React.FC<Props> = ({ onLogout }) => {
   };
 
   const openEditModal = (booking: Booking) => {
-    console.log("[DEBUG] Opening Edit Modal for booking:", booking);
+    console.log("[DEBUG] Opening Edit Modal v2.1 for booking:", booking);
 
     // Determine date - map booking_date to date if needed
-    let bDate = booking.date || (booking as any).booking_date || '';
-    if (bDate && bDate.includes('T')) {
-      bDate = bDate.split('T')[0];
+    let bDateRaw = booking.date || (booking as any).booking_date;
+    let bDate = '';
+
+    if (bDateRaw) {
+      bDate = String(bDateRaw).split('T')[0];
+    } else {
+      bDate = new Date().toISOString().split('T')[0];
     }
 
     // Determine capacity consumption
     // PRIORITY: If flexibleCapacity is ON, we force it to OFF (false).
     const shouldConsume = flexibleCapacity ? false : (booking.consumes_capacity ?? true);
 
-    console.log("[DEBUG] Date for form:", bDate);
-    console.log("[DEBUG] Consumes Capacity for form:", shouldConsume);
+    console.log("[DEBUG] Final Date for form:", bDate);
+    console.log("[DEBUG] Final Consumes Capacity:", shouldConsume);
 
     setManualForm({
       date: bDate,
-      turn: booking.turn,
-      time: booking.time,
-      pax: booking.pax,
+      turn: booking.turn || 'lunch',
+      time: booking.time || '13:00',
+      pax: booking.pax || 2,
       zone_id: booking.zone_id || 1,
-      name: booking.customer_name,
-      email: booking.customer_email,
-      phone: booking.customer_phone,
-      comments: booking.comments,
-      deposit_amount: booking.deposit_amount,
-      status: booking.status,
+      name: booking.customer_name || '',
+      email: booking.customer_email || '',
+      phone: booking.customer_phone || '',
+      comments: booking.comments || '',
+      deposit_amount: booking.deposit_amount || 0,
+      status: booking.status || 'confirmed',
       consumes_capacity: shouldConsume
     });
     setSelectedBooking(booking);
@@ -1089,7 +1093,9 @@ const AdminDashboard: React.FC<Props> = ({ onLogout }) => {
         (showManualModal || isEditing) && (
           <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
             <div className="bg-white p-8 max-w-md w-full border-t-4 border-tav-gold shadow-2xl">
-              <h3 className="text-xl font-serif font-bold mb-6 text-tav-black">{isEditing ? 'Editar Reserva' : 'Nueva Reserva Manual'}</h3>
+              <h3 className="text-xl font-serif font-bold mb-6 text-tav-black">
+                {isEditing ? 'Editar Reserva v2.1' : 'Nueva Reserva Manual'}
+              </h3>
               <form onSubmit={isEditing ? handleEditSubmit : handleManualSubmit} className="space-y-4">
                 <input
                   type="text" placeholder="Nombre Cliente" required

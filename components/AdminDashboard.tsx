@@ -53,6 +53,7 @@ const AdminDashboard: React.FC<Props> = ({ onLogout }) => {
 
   // Settings State
   const [depositEnabled, setDepositEnabled] = useState<boolean>(true);
+  const [flexibleCapacity, setFlexibleCapacity] = useState<boolean>(false);
   const [closedWeekdays, setClosedWeekdays] = useState<number[]>([]);
   const [logoUrl, setLogoUrl] = useState<string>('');
 
@@ -222,6 +223,7 @@ const AdminDashboard: React.FC<Props> = ({ onLogout }) => {
     const settings = await getSettings();
     // Default to true if not set
     setDepositEnabled(settings['enable_deposit'] !== 'false');
+    setFlexibleCapacity(settings['flexible_capacity'] === 'true');
     if (settings['closed_weekdays']) {
       setClosedWeekdays(settings['closed_weekdays'].split(',').map(Number));
     }
@@ -431,8 +433,14 @@ const AdminDashboard: React.FC<Props> = ({ onLogout }) => {
   };
 
   const openEditModal = (booking: Booking) => {
+    // Determine date - use booking_date from DB if date is missing
+    let bookingDate = booking.date || (booking as any).booking_date || '';
+    if (bookingDate.includes('T')) {
+      bookingDate = bookingDate.split('T')[0];
+    }
+
     setManualForm({
-      date: booking.date,
+      date: bookingDate,
       turn: booking.turn,
       time: booking.time,
       pax: booking.pax,
@@ -443,7 +451,8 @@ const AdminDashboard: React.FC<Props> = ({ onLogout }) => {
       comments: booking.comments,
       deposit_amount: booking.deposit_amount,
       status: booking.status,
-      consumes_capacity: booking.consumes_capacity ?? true
+      // If flexibleCapacity is active, default to false (OFF). Otherwise use booking value or true.
+      consumes_capacity: flexibleCapacity ? false : (booking.consumes_capacity ?? true)
     });
     setSelectedBooking(booking);
     setIsEditing(true);
@@ -734,7 +743,6 @@ const AdminDashboard: React.FC<Props> = ({ onLogout }) => {
                   <button
                     type="button"
                     onClick={() => {
-                      const pref = localStorage.getItem('consumes_capacity_pref') !== 'false';
                       setManualForm({
                         date: new Date().toISOString().split('T')[0],
                         turn: 'lunch',
@@ -746,7 +754,7 @@ const AdminDashboard: React.FC<Props> = ({ onLogout }) => {
                         phone: '',
                         deposit_amount: 0,
                         status: 'confirmed',
-                        consumes_capacity: pref
+                        consumes_capacity: !flexibleCapacity
                       });
                       setShowManualModal(true);
                     }}

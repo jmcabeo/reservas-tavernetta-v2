@@ -26,7 +26,8 @@ export interface Booking {
   id: string; // UUID
   restaurant_id: string; // UUID
   created_at: string;
-  date: string; // YYYY-MM-DD
+  booking_date: string; // YYYY-MM-DD (From DB)
+  date?: string; // Legacy field mapping
   turn: Turn;
   time: string; // HH:MM
   pax: number;

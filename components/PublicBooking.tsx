@@ -356,7 +356,8 @@ const PublicBooking: React.FC<Props> = ({ lang }) => {
           <div className="space-y-8 animate-in fade-in duration-500">
             <div className="text-center mb-8">
               <h2 className="text-2xl font-bold text-gray-900 mb-1">{t.step1}</h2>
-              <div className="w-16 h-1 bg-secondary mx-auto rounded-full"></div>
+              <div className="w-16 h-1 bg-secondary mx-auto rounded-full mb-2"></div>
+              <p className="text-[10px] text-gray-300 font-mono">v1.0.5-debug (Fix Fallback)</p>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">

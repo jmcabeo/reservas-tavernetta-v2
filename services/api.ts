@@ -58,7 +58,7 @@ export const checkAvailability = async (date: string, turn: Turn, pax: number): 
       .eq('turn', turn)
       .eq('status', 'blocked');
 
-    const blockedZoneIds = new Set((blockedZones || []).map((b: any) => b.zone_id));
+    const blockedZoneIds = new Set((blockedZones || []).map((b: any) => Number(b.zone_id)));
 
     // DEBUG LOGGING
     console.log('[checkAvailability] Debug:', {
@@ -93,7 +93,7 @@ export const checkAvailability = async (date: string, turn: Turn, pax: number): 
     ]));
 
     // 3. Filter and Enrich data
-    const result = (data as any[]).filter(z => !blockedZoneIds.has(z.zone_id)).map(z => ({
+    const result = (data as any[]).filter(z => !blockedZoneIds.has(Number(z.zone_id))).map(z => ({
       ...z,
       zone_name_es: z.zone_name_es || zoneMap.get(z.zone_id)?.es || 'Zona ' + z.zone_id,
       zone_name_en: z.zone_name_en || zoneMap.get(z.zone_id)?.en || 'Zone ' + z.zone_id

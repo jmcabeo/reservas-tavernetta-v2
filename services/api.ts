@@ -60,6 +60,13 @@ export const checkAvailability = async (date: string, turn: Turn, pax: number): 
 
     const blockedZoneIds = new Set((blockedZones || []).map((b: any) => b.zone_id));
 
+    // DEBUG LOGGING
+    console.log('[checkAvailability] Debug:', {
+      date, turn, pax, R_ID, flexibleCapacity,
+      blockedZonesCount: blockedZones?.length || 0,
+      blockedZoneIds: Array.from(blockedZoneIds)
+    });
+
     // 1. Try RPC first (UPDATED SIGNATURE)
     const { data, error } = await supabase.rpc('check_availability', {
       check_date: date,
@@ -86,13 +93,14 @@ export const checkAvailability = async (date: string, turn: Turn, pax: number): 
     ]));
 
     // 3. Filter and Enrich data
-    // Even if flexible_capacity is on, BLOCKED zones must be filtered out
-    // The RPC should handle this, but double check here for safety
-    return (data as any[]).filter(z => !blockedZoneIds.has(z.zone_id)).map(z => ({
+    const result = (data as any[]).filter(z => !blockedZoneIds.has(z.zone_id)).map(z => ({
       ...z,
       zone_name_es: z.zone_name_es || zoneMap.get(z.zone_id)?.es || 'Zona ' + z.zone_id,
       zone_name_en: z.zone_name_en || zoneMap.get(z.zone_id)?.en || 'Zone ' + z.zone_id
     }));
+
+    console.log('[checkAvailability] Result:', result);
+    return result;
   } catch (e) {
     console.error('Unexpected error in checkAvailability, using fallback:', e);
     // Determine flexibleCapacity again since scope might be different if error happened early

@@ -1,0 +1,16 @@
+
+🔎 DIAGNOSING: 2026-02-14 (dinner)
+Restaurant ID: 171ee012-0173-4ca4-8977-6d0e2b34497a
+🗺️ ZONES MAP: {"1":"Salón","2":"Barra","3":"Terraza Interior","4":"Terraza Exterior"}
+⚙️ Settings: flexible_capacity=true
+
+📦 RAW BOOKINGS (Status=blocked):
+   - [192] Zone: 1 (Salón) | Status: blocked
+   Blocked Zone IDs: 1
+
+🚀 RUNNING RPC (check_availability):
+   ✅ RPC returned 3 zones.
+   Available Zone IDs: 2, 3, 4
+   Available Zone NAMES: Barra, Terraza Interior, Terraza Exterior
+
+   ✅ SUCCESS: No blocked zones found.

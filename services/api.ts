@@ -103,9 +103,11 @@ export const checkAvailability = async (date: string, turn: Turn, pax: number): 
     return result;
   } catch (e) {
     console.error('Unexpected error in checkAvailability, using fallback:', e);
+    console.warn('⚠️ FALLBACK MODE ACTIVATED due to RPC error. Blocks will be re-fetched.'); // Alert user/dev
     // Determine flexibleCapacity again since scope might be different if error happened early
     let flex = false;
     try { flex = (await getSettings())['flexible_capacity'] === 'true'; } catch { }
+    // Pass undefined for blockedZoneIds so fallback fetches them fresh
     return await checkAvailabilityFallback(date, turn, pax, undefined, flex);
   }
 };
@@ -126,6 +128,20 @@ const checkAvailabilityFallback = async (date: string, turn: Turn, pax: number, 
 
     if (blocked) {
       return [];
+    }
+
+    // 1.b Check Blocked Zones (Fix: Fetch if not provided)
+    let finalBlockedZoneIds = blockedZoneIds;
+    if (!finalBlockedZoneIds) {
+      const { data: blockedZones } = await supabase
+        .from('bookings')
+        .select('zone_id')
+        .eq('restaurant_id', R_ID)
+        .eq('booking_date', date)
+        .eq('turn', turn)
+        .eq('status', 'blocked');
+
+      finalBlockedZoneIds = new Set((blockedZones || []).map((b: any) => Number(b.zone_id)));
     }
 
     // 2. Get All Zones
@@ -187,7 +203,7 @@ const checkAvailabilityFallback = async (date: string, turn: Turn, pax: number, 
       // 1. Zone must NOT be blocked (always prevails)
       // 2. Available slots > 0 OR flexibleCapacity is true
       .filter(item => {
-        if (blockedZoneIds && blockedZoneIds.has(item.zone_id)) return false;
+        if (finalBlockedZoneIds && finalBlockedZoneIds.has(Number(item.zone_id))) return false;
         return flexibleCapacity || item.available_slots > 0;
       });
 

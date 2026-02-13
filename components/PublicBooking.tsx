@@ -132,22 +132,9 @@ const PublicBooking: React.FC<Props> = ({ lang }) => {
     setError(null);
 
     // If Flexible Capacity is ON, bypass strict table checking
-    if (flexibleCapacity) {
-      // Fetch All Zones directly
-      const { data } = await supabase.from('zones').select('*').eq('restaurant_id', RESTAURANT_ID);
-      if (data) {
-        setZones(data.map(z => ({
-          zone_id: z.id,
-          zone_name_es: z.name_es || z.name,
-          zone_name_en: z.name_en || z.name,
-          available_slots: 999
-        })));
-      }
-    } else {
-      // Normal Flow (Strict Capacity)
-      const availableZones = await checkAvailability(formData.date, formData.turn, formData.pax);
-      setZones(availableZones || []);
-    }
+    // Unified flow: checkAvailability now handles flexible_capacity logic AND blocks internally
+    const availableZones = await checkAvailability(formData.date, formData.turn, formData.pax);
+    setZones(availableZones || []);
 
     setLoading(false);
     setStep(2);

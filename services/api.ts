@@ -37,15 +37,11 @@ export const checkAvailability = async (date: string, turn: Turn, pax: number): 
     }
 
     // 0.a PRE-CHECK: Check Recurring Closed Weekdays
-    const { data: settingsData } = await supabase
-      .from('settings')
-      .select('value')
-      .eq('restaurant_id', R_ID)
-      .eq('key', 'closed_weekdays')
-      .maybeSingle();
+    const settings = await getSettings(); // Fetch all settings at once
+    const flexibleCapacity = settings['flexible_capacity'] === 'true';
 
-    if (settingsData && settingsData.value) {
-      const closedDays = settingsData.value.split(',').map(Number); // 0=Sun, 1=Mon...
+    if (settings['closed_weekdays']) {
+      const closedDays = settings['closed_weekdays'].split(',').map(Number); // 0=Sun, 1=Mon...
       const dateObj = new Date(date);
       const dayOfWeek = dateObj.getDay();
       if (closedDays.includes(dayOfWeek)) {
@@ -69,12 +65,13 @@ export const checkAvailability = async (date: string, turn: Turn, pax: number): 
       check_date: date,
       check_turn: turn,
       check_pax: pax,
-      check_restaurant_id: R_ID
+      check_restaurant_id: R_ID,
+      flexible_capacity: flexibleCapacity // Pass the setting
     });
 
     if (error) {
       console.warn('RPC Error (switching to client-side fallback):', error.message);
-      return await checkAvailabilityFallback(date, turn, pax, blockedZoneIds);
+      return await checkAvailabilityFallback(date, turn, pax, blockedZoneIds, flexibleCapacity);
     }
 
     // 2. Fetch Zones to ensure we have names
@@ -89,6 +86,8 @@ export const checkAvailability = async (date: string, turn: Turn, pax: number): 
     ]));
 
     // 3. Filter and Enrich data
+    // Even if flexible_capacity is on, BLOCKED zones must be filtered out
+    // The RPC should handle this, but double check here for safety
     return (data as any[]).filter(z => !blockedZoneIds.has(z.zone_id)).map(z => ({
       ...z,
       zone_name_es: z.zone_name_es || zoneMap.get(z.zone_id)?.es || 'Zona ' + z.zone_id,
@@ -96,14 +95,17 @@ export const checkAvailability = async (date: string, turn: Turn, pax: number): 
     }));
   } catch (e) {
     console.error('Unexpected error in checkAvailability, using fallback:', e);
-    return await checkAvailabilityFallback(date, turn, pax);
+    // Determine flexibleCapacity again since scope might be different if error happened early
+    let flex = false;
+    try { flex = (await getSettings())['flexible_capacity'] === 'true'; } catch { }
+    return await checkAvailabilityFallback(date, turn, pax, undefined, flex);
   }
 };
 
 /**
  * Client-Side Fallback for Availability
  */
-const checkAvailabilityFallback = async (date: string, turn: Turn, pax: number, blockedZoneIds?: Set<number>): Promise<AvailabilityResponse[]> => {
+const checkAvailabilityFallback = async (date: string, turn: Turn, pax: number, blockedZoneIds?: Set<number>, flexibleCapacity: boolean = false): Promise<AvailabilityResponse[]> => {
   const R_ID = getApiRestaurantId();
   try {
     // 1. Check Blocked Days
@@ -156,8 +158,10 @@ const checkAvailabilityFallback = async (date: string, turn: Turn, pax: number, 
     zones.forEach((z: Zone) => availabilityMap.set(z.id, 0));
 
     suitableTables.forEach((t: Table) => {
-      if (blockedZoneIds && blockedZoneIds.has(t.zone_id)) return;
-
+      // Logic Fix: Even if table is blocked, we care about zone blocks primarily in fallback?
+      // Actually blockedZoneIds acts as a filter at the end.
+      // But if flexible capacity is on, we don't care if tables are full
+      // default count calculation:
       if (!bookedTableIds.has(t.id)) {
         const currentCount = availabilityMap.get(t.zone_id) || 0;
         availabilityMap.set(t.zone_id, currentCount + 1);
@@ -171,7 +175,13 @@ const checkAvailabilityFallback = async (date: string, turn: Turn, pax: number, 
         zone_name_en: (z as any).zone_name_en || (z as any).name_en || z.name,
         available_slots: availabilityMap.get(z.id) || 0
       }))
-      .filter(item => item.available_slots > 0);
+      // Filter logic:
+      // 1. Zone must NOT be blocked (always prevails)
+      // 2. Available slots > 0 OR flexibleCapacity is true
+      .filter(item => {
+        if (blockedZoneIds && blockedZoneIds.has(item.zone_id)) return false;
+        return flexibleCapacity || item.available_slots > 0;
+      });
 
     return result;
 
